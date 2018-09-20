@@ -170,8 +170,8 @@ namespace Unity.Entities
             return answer;
         }
 
-        public int InsertSharedComponent<T>(T newData) where T : struct => InsertSharedComponent(ref newData);
-        public int InsertSharedComponent<T>(ref T newData) where T : struct
+        public int InsertSharedComponent<T>(T newData) where T : struct, ISharedComponentData => InsertSharedComponent(ref newData);
+        public int InsertSharedComponent<T>(ref T newData) where T : struct, ISharedComponentData
         {
             var typeIndex = TypeManager.GetTypeIndex<T>();
             var typeInfo = TypeManager.GetTypeInfo(typeIndex).FastEqualityTypeInfo;
@@ -210,7 +210,7 @@ namespace Unity.Entities
             } while (indexDictionary.TryGetNextValue(out itemIndex, ref iter));
             return -1;
         }
-        private int FindNonDefaultSharedComponentIndex<T>(int typeIndex, ulong key, ref T newData, FastEquality.TypeInfo typeInfo, List<T> list) where T : struct
+        private int FindNonDefaultSharedComponentIndex<T>(int typeIndex, ulong key, ref T newData, FastEquality.TypeInfo typeInfo, List<T> list) where T : struct, ISharedComponentData
         {
             if (!indexDictionary.TryGetFirstValue(key, out var itemIndex, out var iter))
                 return -1;
@@ -222,7 +222,7 @@ namespace Unity.Entities
             } while (indexDictionary.TryGetNextValue(out itemIndex, ref iter));
             return -1;
         }
-        private int FindNonDefaultSharedComponentIndex<T>(int typeIndex, ulong key, ref T newData, FastEquality.TypeInfo typeInfo) where T : struct
+        private int FindNonDefaultSharedComponentIndex<T>(int typeIndex, ulong key, ref T newData, FastEquality.TypeInfo typeInfo) where T : struct, ISharedComponentData
         {
             if (!indexDictionary.TryGetFirstValue(key, out var itemIndex, out var iter))
                 return -1;
@@ -253,7 +253,7 @@ namespace Unity.Entities
             var index = FindNonDefaultSharedComponentIndex(typeIndex, key, ptr, typeInfo, tuple.dataList);
             if (index == -1)
             {
-                index = Add(typeIndex, hashCode, ref newData);
+                index = Add(typeIndex, hashCode, newData);
             }
             else
             {
@@ -271,7 +271,7 @@ namespace Unity.Entities
             var index = FindNonDefaultSharedComponentIndex(typeIndex, key, ptr, typeInfo, list);
             if (index == -1)
             {
-                index = Add(typeIndex, hashCode, ref newData);
+                index = Add(typeIndex, hashCode, newData);
             }
             else
             {
@@ -281,7 +281,7 @@ namespace Unity.Entities
             UnsafeUtility.ReleaseGCObject(handle);
             return ModifyIndex(typeIndex, index);
         }
-        internal unsafe int InsertSharedComponentAssumeNonDefault<T>(int typeIndex, int hashCode, ref T newData, FastEquality.TypeInfo typeInfo) where T : struct
+        internal unsafe int InsertSharedComponentAssumeNonDefault<T>(int typeIndex, int hashCode, ref T newData, FastEquality.TypeInfo typeInfo) where T : struct, ISharedComponentData
         {
             var index = FindNonDefaultSharedComponentIndex(typeIndex, CalcKey(typeIndex, hashCode), ref newData, typeInfo);
 
@@ -302,7 +302,7 @@ namespace Unity.Entities
             return ModifyIndex(typeIndex, index);
         }
 
-        private unsafe void InitializeAdd<T>(int typeIndex, ulong key, ref T newData) where T : struct
+        private unsafe void InitializeAdd<T>(int typeIndex, ulong key, ref T newData) where T : struct, ISharedComponentData
         {
             (IList dataList, NativeList<int> referenceCounts, NativeList<int> versions, SortedSet<int> freeIndices) tuple;
             (tuple.dataList = new List<T>()).Add(newData);
@@ -313,7 +313,29 @@ namespace Unity.Entities
             indexDictionary.Add(key, 0);
         }
 
-        private int Add<T>(int typeIndex, int hashCode, ref T newData)
+        private int Add(int typeIndex, int hashCode, object newData)
+        {
+            int index;
+            var (arrayList, refcounts, versions, freeIndices) = dataDictionary[typeIndex];
+            if (freeIndices.Count == 0)
+            {
+                index = arrayList.Count;
+                arrayList.Add(newData);
+                refcounts.Add(1);
+                versions.Add(1);
+                indexDictionary.Add(CalcKey(typeIndex, hashCode), index);
+                return index;
+            }
+            index = freeIndices.Min;
+            freeIndices.Remove(index);
+            indexDictionary.Add(CalcKey(typeIndex, hashCode), index);
+            arrayList[index] = newData;
+            refcounts[index] = 1;
+            versions[index] = 1;
+            return index;
+        }
+
+        private int Add<T>(int typeIndex, int hashCode, ref T newData) where T : struct, ISharedComponentData
         {
             int index;
             var (arrayList, refcounts, versions, freeIndices) = dataDictionary[typeIndex];
@@ -346,8 +368,8 @@ namespace Unity.Entities
             ++tuple.versions[actualIndex];
         }
 
-        public int GetSharedComponentVersion<T>(T sharedData) where T : struct => GetSharedComponentVersion(ref sharedData);
-        public int GetSharedComponentVersion<T>(ref T sharedData) where T : struct
+        public int GetSharedComponentVersion<T>(T sharedData) where T : struct, ISharedComponentData => GetSharedComponentVersion(ref sharedData);
+        public int GetSharedComponentVersion<T>(ref T sharedData) where T : struct, ISharedComponentData
         {
             var typeIndex = TypeManager.GetTypeIndex<T>();
             var typeInfo = TypeManager.GetTypeInfo(typeIndex).FastEqualityTypeInfo;
