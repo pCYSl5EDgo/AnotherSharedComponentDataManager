@@ -1,0 +1,14 @@
+[Ll]ibrary/
+[Ll]ogs/
+[Dd]ebug/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild*/
+Assets/AssetStoreTools*
+.vscode/
+*.sln
+*.csproj
+*.pdb
+*.unitypackage
+*.tmp
+sysinfo.txt
