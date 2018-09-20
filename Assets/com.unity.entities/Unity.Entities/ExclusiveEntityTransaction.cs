@@ -259,7 +259,7 @@ namespace Unity.Entities
             var archetypeManager = ArchetypeManager;
             var sharedComponentDataManager = SharedComponentDataManager;
 
-            var newSharedComponentDataIndex = sharedComponentDataManager.InsertSharedComponent(componentData);
+            var newSharedComponentDataIndex = sharedComponentDataManager.InsertSharedComponent(ref componentData);
             m_Entities->SetSharedComponentDataIndex(archetypeManager, sharedComponentDataManager, entity, typeIndex,
                 newSharedComponentDataIndex);
             sharedComponentDataManager.RemoveReference(newSharedComponentDataIndex);

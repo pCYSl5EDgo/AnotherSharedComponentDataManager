@@ -576,7 +576,7 @@ namespace Unity.Entities
             var typeIndex = TypeManager.GetTypeIndex<T>();
             Entities->AssertEntityHasComponent(entity, typeIndex);
 
-            var newSharedComponentDataIndex = m_SharedComponentManager.InsertSharedComponent(componentData);
+            var newSharedComponentDataIndex = m_SharedComponentManager.InsertSharedComponent(ref componentData);
             Entities->SetSharedComponentDataIndex(ArchetypeManager, m_SharedComponentManager, entity, typeIndex,
                 newSharedComponentDataIndex);
             m_SharedComponentManager.RemoveReference(newSharedComponentDataIndex);
@@ -759,7 +759,7 @@ namespace Unity.Entities
             Entities->AssertEntityHasComponent(entity, typeIndex);
 
             var sharedComponentIndex = Entities->GetSharedComponentDataIndex(entity, typeIndex);
-            return m_SharedComponentManager.GetSharedComponentDataBoxed(sharedComponentIndex, typeIndex);
+            return m_SharedComponentManager.GetSharedComponentDataBoxed(sharedComponentIndex);
         }
 
         public int GetComponentOrderVersion<T>()
