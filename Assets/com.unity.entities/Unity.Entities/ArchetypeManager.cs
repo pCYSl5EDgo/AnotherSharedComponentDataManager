@@ -911,10 +911,7 @@ namespace Unity.Entities
                 chunk->Archetype = dstArchetype;
 
                 for (int i = 0; i < dstArchetype->NumSharedComponents; ++i)
-                {
-                    if (remapShared.TryGetValue(chunk->SharedComponentValueArray[i], out var componentIndex))
-                        chunk->SharedComponentValueArray[i] = componentIndex;
-                }
+                    chunk->SharedComponentValueArray[i] = remapShared.TryGetValue(chunk->SharedComponentValueArray[i], out var componentIndex) ? componentIndex : 0;
             }
         }
 

@@ -386,8 +386,8 @@ namespace Unity.Entities
         public T GetSharedComponentData<T>(int index) where T : struct
             => DeconstructIndex(index, out var typeIndex, out var actualIndex) ? default : (dataDictionary[typeIndex].dataList as List<T>)[actualIndex];
 
-        public object GetSharedComponentDataBoxed(int index)
-            => DeconstructIndex(index, out var typeIndex, out var actualIndex) ? Activator.CreateInstance(TypeManager.GetType(typeIndex)) : dataDictionary[typeIndex].dataList[actualIndex];
+        public object GetSharedComponentDataBoxed(int index, int typeIndex)
+            => DeconstructIndex(index, out var typeIndex2, out var actualIndex) ? Activator.CreateInstance(TypeManager.GetType(typeIndex)) : (typeIndex == typeIndex2 ? dataDictionary[typeIndex].dataList[actualIndex] : throw new Exception());
 
         public object GetSharedComponentDataNonDefaultBoxed(int index)
         {

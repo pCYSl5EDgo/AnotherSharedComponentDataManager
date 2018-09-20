@@ -44,7 +44,7 @@ namespace Unity.Entities
         public void OnCreate()
         {
             m_EntitiesCapacity = 10;
-            m_Entities = (EntityData*)UnsafeUtility.Malloc(m_EntitiesCapacity * sizeof(EntityData), 64, Allocator.Persistent);
+            m_Entities = (EntityData*) UnsafeUtility.Malloc(m_EntitiesCapacity * sizeof(EntityData), 64, Allocator.Persistent);
             m_EntitiesFreeIndex = 0;
             GlobalSystemVersion = ChangeVersionUtility.InitialGlobalSystemVersion;
             InitializeAdditionalCapacity(0);
@@ -59,7 +59,7 @@ namespace Unity.Entities
 #endif
 
             const int componentTypeOrderVersionSize = sizeof(int) * TypeManager.MaximumTypesCount;
-            m_ComponentTypeOrderVersion = (int*)UnsafeUtility.Malloc(componentTypeOrderVersionSize,
+            m_ComponentTypeOrderVersion = (int*) UnsafeUtility.Malloc(componentTypeOrderVersionSize,
                 UnsafeUtility.AlignOf<int>(), Allocator.Persistent);
             UnsafeUtility.MemClear(m_ComponentTypeOrderVersion, componentTypeOrderVersionSize);
         }
@@ -100,7 +100,7 @@ namespace Unity.Entities
                 if (value <= m_EntitiesCapacity)
                     return;
 
-                var newEntities = (EntityData*)UnsafeUtility.Malloc(value * sizeof(EntityData),
+                var newEntities = (EntityData*) UnsafeUtility.Malloc(value * sizeof(EntityData),
                     64, Allocator.Persistent);
                 UnsafeUtility.MemCpy(newEntities, m_Entities, m_EntitiesCapacity * sizeof(EntityData));
                 UnsafeUtility.Free(m_Entities, Allocator.Persistent);
@@ -238,7 +238,7 @@ namespace Unity.Entities
 
             // updates EntitityData->indexInChunk to point to where the components will be moved to
             //Assert.IsTrue(chunk->archetype->sizeOfs[0] == sizeof(Entity) && chunk->archetype->offsets[0] == 0);
-            var movedEntities = (Entity*)chunk->Buffer + (chunk->Count - patchCount);
+            var movedEntities = (Entity*) chunk->Buffer + (chunk->Count - patchCount);
             for (var i = 0; i != patchCount; i++)
                 entityDataManager->m_Entities[movedEntities[i].Index].IndexInChunk = indexInChunk + i;
 
@@ -286,7 +286,7 @@ namespace Unity.Entities
                 var archetype = m_Entities[i].Archetype;
                 Assert.AreEqual(entityType, archetype->Types[0].TypeIndex);
                 var entity =
-                    *(Entity*)ChunkDataUtility.GetComponentDataRO(m_Entities[i].Chunk, m_Entities[i].IndexInChunk, 0);
+                    *(Entity*) ChunkDataUtility.GetComponentDataRO(m_Entities[i].Chunk, m_Entities[i].IndexInChunk, 0);
                 Assert.AreEqual(i, entity.Index);
                 Assert.AreEqual(m_Entities[i].Version, entity.Version);
 
@@ -330,7 +330,7 @@ namespace Unity.Entities
             Assert.AreEqual(chunk->Archetype->Offsets[0], 0);
             Assert.AreEqual(chunk->Archetype->SizeOfs[0], sizeof(Entity));
 
-            var entityInChunkStart = (Entity*)chunk->Buffer + baseIndex;
+            var entityInChunkStart = (Entity*) chunk->Buffer + baseIndex;
 
             for (var i = 0; i != count; i++)
             {
@@ -357,7 +357,7 @@ namespace Unity.Entities
             }
         }
 
-        public void AllocateEntitiesForRemapping(EntityDataManager* srcEntityDataManager, ref NativeArray<EntityRemapUtility.EntityRemapInfo> entityRemapping)
+        public void AllocateEntitiesForRemapping(EntityDataManager * srcEntityDataManager, ref NativeArray<EntityRemapUtility.EntityRemapInfo> entityRemapping)
         {
             var srcEntityData = srcEntityDataManager->m_Entities;
             var count = srcEntityDataManager->m_EntitiesCapacity;
@@ -484,7 +484,7 @@ namespace Unity.Entities
         {
             return m_Entities[entity.Index].Archetype;
         }
-
+        
         public Archetype* GetInstantiableArchetype(Entity entity, ArchetypeManager archetypeManager, EntityGroupManager groupManager, ComponentTypeInArchetype* componentTypeInArchetypeArray)
         {
             var srcArchetype = GetArchetype(entity);
@@ -512,7 +512,7 @@ namespace Unity.Entities
             // No need to replace with ourselves
             if (lastIndex != oldChunkIndex)
             {
-                var lastEntity = (Entity*)ChunkDataUtility.GetComponentDataRO(oldChunk, lastIndex, 0);
+                var lastEntity = (Entity*) ChunkDataUtility.GetComponentDataRO(oldChunk, lastIndex, 0);
                 m_Entities[lastEntity->Index].IndexInChunk = oldChunkIndex;
 
                 ChunkDataUtility.Copy(oldChunk, lastIndex, oldChunk, oldChunkIndex, 1);
@@ -562,7 +562,6 @@ namespace Unity.Entities
 
                     if (archetype->SharedComponentOffset == null)
                     {
-                        Debug.Log("XXX");
                         sharedComponentDataIndices[0] = 0;
                     }
                     else
@@ -573,7 +572,6 @@ namespace Unity.Entities
                         {
                             if (archetype->SharedComponentOffset[t] != -1)
                             {
-                                Debug.Log("YYY" + t.ToString());
                                 sharedComponentDataIndices[sharedIndex] = oldSharedComponentDataIndices[sharedIndex];
                                 ++sharedIndex;
                             }
@@ -650,8 +648,8 @@ namespace Unity.Entities
                             for (var t = 1; t < archetype->TypesCount; ++t)
                             {
                                 var type = archetype->Types[t];
-
-                                if (!(type.IsSystemStateComponent || type.IsSystemStateSharedComponent))
+                                
+                                if (!(type.IsSystemStateComponent||type.IsSystemStateSharedComponent))
                                 {
                                     ++removedTypes;
                                     removedComponentIsShared |= type.IsSharedComponent;
@@ -687,7 +685,7 @@ namespace Unity.Entities
                                             var typeIndex = archetype->Types[t].TypeIndex;
                                             var systemStateType = typeof(ISystemStateComponentData).IsAssignableFrom(TypeManager.GetType(typeIndex));
                                             var systemStateSharedType = typeof(ISystemStateSharedComponentData).IsAssignableFrom(TypeManager.GetType(typeIndex));
-                                            if (!(systemStateType || systemStateSharedType))
+                                            if (!(systemStateType||systemStateSharedType))
                                             {
                                                 srcIndex++;
                                             }
@@ -794,7 +792,7 @@ namespace Unity.Entities
             // No need to replace with ourselves
             if (lastIndex != oldChunkIndex)
             {
-                var lastEntity = (Entity*)ChunkDataUtility.GetComponentDataRO(oldChunk, lastIndex, 0);
+                var lastEntity = (Entity*) ChunkDataUtility.GetComponentDataRO(oldChunk, lastIndex, 0);
                 m_Entities[lastEntity->Index].IndexInChunk = oldChunkIndex;
 
                 ChunkDataUtility.Copy(oldChunk, lastIndex, oldChunk, oldChunkIndex, 1);
@@ -812,7 +810,7 @@ namespace Unity.Entities
         public void CreateEntities(ArchetypeManager archetypeManager, Archetype* archetype, Entity* entities, int count)
         {
             int* sharedComponentDataIndices = stackalloc int[archetype->NumSharedComponents];
-            UnsafeUtility.MemClear(sharedComponentDataIndices, archetype->NumSharedComponents * sizeof(int));
+            UnsafeUtility.MemClear(sharedComponentDataIndices, archetype->NumSharedComponents*sizeof(int));
 
             while (count != 0)
             {
@@ -834,8 +832,7 @@ namespace Unity.Entities
         {
             var srcIndex = m_Entities[srcEntity.Index].IndexInChunk;
             var srcChunk = m_Entities[srcEntity.Index].Chunk;
-            var srcArchetype = GetArchetype(srcEntity);
-            var dstArchetype = GetInstantiableArchetype(srcEntity, archetypeManager, groupManager, componentTypeInArchetypeArray);
+            var dstArchetype = GetInstantiableArchetype(srcEntity,archetypeManager, groupManager, componentTypeInArchetypeArray);
             var srcSharedComponentDataIndices = GetComponentChunk(srcEntity)->SharedComponentValueArray;
 
             while (count != 0)
@@ -885,7 +882,7 @@ namespace Unity.Entities
             var sharedComponentIndices = stackalloc int[archetype->NumSharedComponents];
             var srcSharedComponentDataIndices = srcChunk->SharedComponentValueArray;
 
-            UnsafeUtility.MemCpy(sharedComponentIndices, srcSharedComponentDataIndices, archetype->NumSharedComponents * sizeof(int));
+            UnsafeUtility.MemCpy(sharedComponentIndices, srcSharedComponentDataIndices, archetype->NumSharedComponents*sizeof(int));
 
             sharedComponentIndices[sharedComponentOffset] = newSharedComponentDataIndex;
 
