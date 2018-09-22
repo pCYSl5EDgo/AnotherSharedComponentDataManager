@@ -27,7 +27,7 @@ namespace Unity.Entities
         {
             get
             {
-                return (SharedComponentDataManager) m_SharedComponentDataManager.Target;
+                return (SharedComponentDataManager)m_SharedComponentDataManager.Target;
             }
         }
 
@@ -35,12 +35,12 @@ namespace Unity.Entities
         {
             get
             {
-                return (ArchetypeManager) m_ArchetypeManager.Target;
+                return (ArchetypeManager)m_ArchetypeManager.Target;
             }
         }
 
-        
-        
+
+
         internal ExclusiveEntityTransaction(ArchetypeManager archetypes, EntityGroupManager entityGroupManager,
             SharedComponentDataManager sharedComponentDataManager, EntityDataManager* data)
         {
@@ -53,7 +53,7 @@ namespace Unity.Entities
             m_SharedComponentDataManager = GCHandle.Alloc(sharedComponentDataManager, GCHandleType.Weak);
 
             m_CachedComponentTypeInArchetypeArray =
-                (ComponentTypeInArchetype*) UnsafeUtility.Malloc(sizeof(ComponentTypeInArchetype) * 32 * 1024, 16,
+                (ComponentTypeInArchetype*)UnsafeUtility.Malloc(sizeof(ComponentTypeInArchetype) * 32 * 1024, 16,
                     Allocator.Persistent);
         }
 
@@ -93,7 +93,7 @@ namespace Unity.Entities
         {
             CheckAccess();
 
-            var groupManager = (EntityGroupManager) m_EntityGroupManager.Target;
+            var groupManager = (EntityGroupManager)m_EntityGroupManager.Target;
 
             EntityArchetype type;
             type.Archetype = ArchetypeManager.GetOrCreateArchetype(m_CachedComponentTypeInArchetypeArray,
@@ -121,7 +121,7 @@ namespace Unity.Entities
 
         public void CreateEntity(EntityArchetype archetype, NativeArray<Entity> entities)
         {
-            CreateEntityInternal(archetype, (Entity*) entities.GetUnsafePtr(), entities.Length);
+            CreateEntityInternal(archetype, (Entity*)entities.GetUnsafePtr(), entities.Length);
         }
 
         public Entity CreateEntity(params ComponentType[] types)
@@ -144,7 +144,7 @@ namespace Unity.Entities
 
         public void Instantiate(Entity srcEntity, NativeArray<Entity> outputEntities)
         {
-            InstantiateInternal(srcEntity, (Entity*) outputEntities.GetUnsafePtr(), outputEntities.Length);
+            InstantiateInternal(srcEntity, (Entity*)outputEntities.GetUnsafePtr(), outputEntities.Length);
         }
 
         private void InstantiateInternal(Entity srcEntity, Entity* outputEntities, int count)
@@ -154,7 +154,7 @@ namespace Unity.Entities
             if (!m_Entities->Exists(srcEntity))
                 throw new ArgumentException("srcEntity is not a valid entity");
 
-            var groupManager = (EntityGroupManager) m_EntityGroupManager.Target;
+            var groupManager = (EntityGroupManager)m_EntityGroupManager.Target;
 
             m_Entities->InstantiateEntities(ArchetypeManager, SharedComponentDataManager, groupManager, srcEntity, outputEntities,
                 count, m_CachedComponentTypeInArchetypeArray);
@@ -162,12 +162,12 @@ namespace Unity.Entities
 
         public void DestroyEntity(NativeArray<Entity> entities)
         {
-            DestroyEntityInternal((Entity*) entities.GetUnsafeReadOnlyPtr(), entities.Length);
+            DestroyEntityInternal((Entity*)entities.GetUnsafeReadOnlyPtr(), entities.Length);
         }
 
         public void DestroyEntity(NativeSlice<Entity> entities)
         {
-            DestroyEntityInternal((Entity*) entities.GetUnsafeReadOnlyPtr(), entities.Length);
+            DestroyEntityInternal((Entity*)entities.GetUnsafeReadOnlyPtr(), entities.Length);
         }
 
         public void DestroyEntity(Entity entity)
@@ -180,7 +180,7 @@ namespace Unity.Entities
             CheckAccess();
             m_Entities->AssertEntitiesExist(entities, count);
 
-            var groupManager = (EntityGroupManager) m_EntityGroupManager.Target;
+            var groupManager = (EntityGroupManager)m_EntityGroupManager.Target;
 
             m_Entities->TryRemoveEntityId(entities, count, ArchetypeManager, SharedComponentDataManager, groupManager,
                 m_CachedComponentTypeInArchetypeArray);
@@ -190,7 +190,7 @@ namespace Unity.Entities
         {
             CheckAccess();
 
-            var groupManager = (EntityGroupManager) m_EntityGroupManager.Target;
+            var groupManager = (EntityGroupManager)m_EntityGroupManager.Target;
 
             m_Entities->AssertEntitiesExist(&entity, 1);
             m_Entities->AddComponent(entity, type, ArchetypeManager, SharedComponentDataManager, groupManager,
@@ -201,7 +201,7 @@ namespace Unity.Entities
         {
             CheckAccess();
 
-            var groupManager = (EntityGroupManager) m_EntityGroupManager.Target;
+            var groupManager = (EntityGroupManager)m_EntityGroupManager.Target;
 
             m_Entities->AssertEntityHasComponent(entity, type);
             m_Entities->RemoveComponent(entity, type, ArchetypeManager, SharedComponentDataManager, groupManager,
@@ -270,11 +270,18 @@ namespace Unity.Entities
             m_Entities->AllocateConsecutiveEntitiesForLoading(count);
         }
 
-
+#if SHARED_1
         internal void AddExistingChunk(Chunk* chunk)
         {
             ArchetypeManager.AddExistingChunk(chunk);
             m_Entities->AddExistingChunk(chunk);
         }
+#else
+        internal void AddExistingChunk(Chunk* chunk, int[] sharedComponents)
+        {
+            ArchetypeManager.AddExistingChunk(chunk, sharedComponents);
+            m_Entities->AddExistingChunk(chunk);
+        }
+#endif
     }
 }

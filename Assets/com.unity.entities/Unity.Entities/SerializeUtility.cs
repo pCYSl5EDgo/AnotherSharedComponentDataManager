@@ -21,8 +21,12 @@ namespace Unity.Entities.Serialization
         }
 
         public static int CurrentFileFormatVersion = 6;
-
-        public static unsafe void DeserializeWorld(ExclusiveEntityTransaction manager, BinaryReader reader, int numSharedComponents)
+        public static unsafe void DeserializeWorld(ExclusiveEntityTransaction manager, BinaryReader reader,
+#if SHARED_1
+        int numSharedComponents)
+#else
+        int[] sharedComponents)
+#endif
         {
             if (manager.ArchetypeManager.CountEntities() != 0)
             {
@@ -45,7 +49,7 @@ namespace Unity.Entities.Serialization
 
             for (int i = 0; i < totalChunkCount; ++i)
             {
-                var chunk = (Chunk*) UnsafeUtility.Malloc(Chunk.kChunkSize, 64, Allocator.Persistent);
+                var chunk = (Chunk*)UnsafeUtility.Malloc(Chunk.kChunkSize, 64, Allocator.Persistent);
                 reader.ReadBytes(chunk, Chunk.kChunkSize);
 
                 chunk->Archetype = archetypes[(int)chunk->Archetype].Archetype;
@@ -57,14 +61,22 @@ namespace Unity.Entities.Serialization
                 for (int j = 0; j < numSharedComponentsInArchetype; ++j)
                 {
                     // The shared component 0 is not part of the array, so an index equal to the array size is valid.
+#if SHARED_1
                     if (chunk->SharedComponentValueArray[j] > numSharedComponents)
+#else
+                    if (chunk->SharedComponentValueArray[j] > sharedComponents.Length)
+#endif
                     {
                         throw new ArgumentException(
+#if SHARED_1
                             $"Archetype uses shared component at index {chunk->SharedComponentValueArray[j]} but only {numSharedComponents} are available, check if the shared scene has been properly loaded.");
+#else
+                            $"Archetype uses shared component at index {chunk->SharedComponentValueArray[j]} but only {sharedComponents.Length} are available, check if the shared scene has been properly loaded.");
+#endif
                     }
                 }
 
-                chunk->ChangeVersion = (uint*) ((byte*) chunk +
+                chunk->ChangeVersion = (uint*)((byte*)chunk +
                                                 Chunk.GetChangedComponentOffset(chunk->Archetype->TypesCount,
                                                     chunk->Archetype->NumSharedComponents));
 
@@ -81,15 +93,18 @@ namespace Unity.Entities.Serialization
                         var target = (BufferHeader*)OffsetFromPointer(chunk->Buffer, bufferPatches[pi].ChunkOffset);
 
                         // TODO: Alignment
-                        target->Pointer = (byte*) UnsafeUtility.Malloc(bufferPatches[pi].AllocSizeBytes, 8, Allocator.Persistent);
+                        target->Pointer = (byte*)UnsafeUtility.Malloc(bufferPatches[pi].AllocSizeBytes, 8, Allocator.Persistent);
 
                         reader.ReadBytes(target->Pointer, bufferPatches[pi].AllocSizeBytes);
                     }
 
                     bufferPatches.Dispose();
                 }
-
+#if SHARED_1
                 manager.AddExistingChunk(chunk);
+#else
+                manager.AddExistingChunk(chunk, sharedComponents);
+#endif
             }
 
             archetypes.Dispose();
@@ -115,7 +130,7 @@ namespace Unity.Entities.Serialization
                     tempComponentTypes.Add(ComponentType.FromTypeIndex(typeIndex));
                 }
 
-                archetypes[i] = entityManager.CreateArchetype((ComponentType*) tempComponentTypes.GetUnsafePtr(),
+                archetypes[i] = entityManager.CreateArchetype((ComponentType*)tempComponentTypes.GetUnsafePtr(),
                     tempComponentTypes.Length);
             }
 
@@ -169,7 +184,7 @@ namespace Unity.Entities.Serialization
             {
                 if (currentArcheType->EntityCount >= 0)
                 {
-                    archetypeList.Add(new EntityArchetype{Archetype = currentArcheType});
+                    archetypeList.Add(new EntityArchetype { Archetype = currentArcheType });
                 }
                 currentArcheType = currentArcheType->PrevArchetype;
             }
@@ -177,7 +192,7 @@ namespace Unity.Entities.Serialization
             archetypeToIndex = new Dictionary<EntityArchetype, int>();
             for (int i = 0; i < archetypeList.Count; ++i)
             {
-                archetypeToIndex.Add(archetypeList[i],i);
+                archetypeToIndex.Add(archetypeList[i], i);
             }
 
             archetypeArray = archetypeList.ToArray();
@@ -190,7 +205,7 @@ namespace Unity.Entities.Serialization
             byte* buffer = chunk->Buffer;
             int count = chunk->Count;
 
-            for (int i = 0; i<arch->TypesCount-1; ++i)
+            for (int i = 0; i < arch->TypesCount - 1; ++i)
             {
                 int index = arch->TypeMemoryOrder[i];
                 int nextIndex = arch->TypeMemoryOrder[i + 1];
@@ -221,6 +236,7 @@ namespace Unity.Entities.Serialization
                 }
             }
 
+#if SHARED_1
             var typeArray = typeindices.Select(index =>
             {
                 var type = TypeManager.GetType(index);
@@ -235,26 +251,37 @@ namespace Unity.Entities.Serialization
                     asciiName = Encoding.ASCII.GetBytes(name)
                 };
             }).OrderBy(t => t.name).ToArray();
+#else
+            var typeArray = typeindices.Select(index =>
+            {
+                var type = TypeManager.GetType(index);
+                var name = type.AssemblyQualifiedName;
+                return (
+                    index,
+                    type,
+                    name,
+                    hash: TypeManager.GetTypeInfo(index).FastEqualityTypeInfo.Hash,
+                    asciiName: Encoding.UTF8.GetBytes(name)
+                );
+            }).OrderBy(t => t.index).ToArray();
+#endif
 
-            int typeNameBufferSize = typeArray.Sum(t => t.asciiName.Length + 1);
             writer.Write(typeArray.Length);
-            foreach (var n in typeArray)
-            {
-                writer.Write(n.hash);
-            }
 
-            writer.Write(typeNameBufferSize);
-            foreach(var n in typeArray)
+            for (int i = 0; i < typeArray.Length; i++)
+                writer.Write(typeArray[i].hash);
+
+            writer.Write(typeArray.Sum(t => t.asciiName.Length + 1));
+
+            for (int i = 0; i < typeArray.Length; i++)
             {
-                writer.Write(n.asciiName);
+                writer.Write(typeArray[i].asciiName);
                 writer.Write((byte)0);
             }
 
             var typeIndexMap = new Dictionary<int, int>();
             for (int i = 0; i < typeArray.Length; ++i)
-            {
-                typeIndexMap[typeArray[i].index] = i;
-            }
+                typeIndexMap.Add(typeArray[i].index, i);
 
             WriteArchetypes(writer, archetypeArray, typeIndexMap);
 
@@ -269,7 +296,7 @@ namespace Unity.Entities.Serialization
             var tempChunk = (Chunk*)UnsafeUtility.Malloc(Chunk.kChunkSize, 16, Allocator.Temp);
 
             var sharedIndexToSerialize = new Dictionary<int, int>();
-            for(int archetypeIndex = 0; archetypeIndex < archetypeArray.Length; ++archetypeIndex)
+            for (int archetypeIndex = 0; archetypeIndex < archetypeArray.Length; ++archetypeIndex)
             {
                 var archetype = archetypeArray[archetypeIndex].Archetype;
                 for (var c = (Chunk*)archetype->ChunkList.Begin; c != archetype->ChunkList.End; c = (Chunk*)c->ChunkListNode.Next)
@@ -291,7 +318,7 @@ namespace Unity.Entities.Serialization
                             continue;
 
                         int subArrayOffset = archetype->Offsets[index];
-                        BufferHeader* header = (BufferHeader*) OffsetFromPointer(tempChunkBuffer, subArrayOffset);
+                        BufferHeader* header = (BufferHeader*)OffsetFromPointer(tempChunkBuffer, subArrayOffset);
                         int stride = archetype->SizeOfs[index];
                         int count = c->Count;
                         var ct = TypeManager.GetTypeInfo(archetype->Types[index].TypeIndex);
@@ -316,7 +343,7 @@ namespace Unity.Entities.Serialization
                     tempChunk->ChunkListNode.Prev = null;
                     tempChunk->ChunkListWithEmptySlotsNode.Next = null;
                     tempChunk->ChunkListWithEmptySlotsNode.Prev = null;
-                    tempChunk->Archetype = (Archetype*) archetypeIndex;
+                    tempChunk->Archetype = (Archetype*)archetypeIndex;
 
                     if (archetype->NumManagedArrays != 0)
                     {
@@ -373,8 +400,8 @@ namespace Unity.Entities.Serialization
 
             sharedComponentsToSerialize = new int[sharedIndexToSerialize.Count];
 
-            foreach (var i in sharedIndexToSerialize)
-                sharedComponentsToSerialize[i.Value - 1] = i.Key;
+            foreach (var (Key, Value) in sharedIndexToSerialize)
+                sharedComponentsToSerialize[Value - 1] = Key;
         }
 
         static unsafe byte* OffsetFromPointer(void* ptr, int offset)

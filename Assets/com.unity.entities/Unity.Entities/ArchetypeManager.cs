@@ -608,14 +608,30 @@ namespace Unity.Entities
             return (Chunk*)(node - 1);
         }
 
-        public void AddExistingChunk(Chunk* chunk)
+        public void AddExistingChunk(Chunk* chunk
+#if SHARED_1
+        )
+#else
+        , int[] sharedComponents)
+#endif
         {
             var archetype = chunk->Archetype;
             archetype->ChunkList.Add(&chunk->ChunkListNode);
             archetype->ChunkCount += 1;
             archetype->EntityCount += chunk->Count;
+#if SHARED_1
             for (var i = 0; i < archetype->NumSharedComponents; ++i)
                 m_SharedComponentManager.AddReference(chunk->SharedComponentValueArray[i]);
+#else
+            for (var i = 0; i < archetype->NumSharedComponents; ++i)
+            {
+                int v = chunk->SharedComponentValueArray[i] - 1;
+                if (v == -1)
+                    m_SharedComponentManager.AddReference(chunk->SharedComponentValueArray[i] = 0);
+                else
+                    m_SharedComponentManager.AddReference(chunk->SharedComponentValueArray[i] = sharedComponents[v]);
+            }
+#endif
 
             if (chunk->Count < chunk->Capacity)
             {

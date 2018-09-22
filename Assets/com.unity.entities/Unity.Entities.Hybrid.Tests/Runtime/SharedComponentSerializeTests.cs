@@ -68,7 +68,7 @@ namespace Unity.Entities.Tests
             var reader = new TestBinaryReader(writer);
 
             var world = new World("temp");
-            SerializeUtilityHybrid.Deserialize (world.GetOrCreateManager<EntityManager>(), reader, sharedComponents);
+            SerializeUtilityHybrid.Deserialize(world.GetOrCreateManager<EntityManager>(), reader, sharedComponents);
 
             var newWorldEntities = world.GetOrCreateManager<EntityManager>();
 

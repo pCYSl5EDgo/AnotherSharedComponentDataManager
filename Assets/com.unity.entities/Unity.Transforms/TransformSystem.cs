@@ -839,7 +839,7 @@ namespace Unity.Transforms
                     for (int i = 0; i < chunks.Length; i++)
                     {
                         var chunk = chunks[i];
-                        var chunkDepthSharedIndex = chunk.GetSharedComponentIndex(depthType);
+                        var chunkDepthSharedIndex = chunk.GetSharedComponentIndex(depthType) & 0xffff;
                         var chunkDepth = -1;
 
                         // -1 = Depth has been removed, but still matching archetype for some reason. #todo
@@ -886,7 +886,7 @@ namespace Unity.Transforms
                     maxDepth = depth;
                 }
 
-                depths[index] = depth;
+                depths[index & 0xffff] = depth;
             }
 
             var chunkIndices = new NativeArray<int>(InnerTreeLocalToWorldChunks.Length, Allocator.TempJob);

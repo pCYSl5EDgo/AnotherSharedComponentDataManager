@@ -8,30 +8,42 @@ namespace Unity.Entities.Serialization
     {
         public static void Serialize(EntityManager manager, BinaryWriter writer, out GameObject sharedData)
         {
-            int[] sharedComponentIndices;
-            SerializeUtility.SerializeWorld(manager, writer, out sharedComponentIndices);
+            SerializeUtility.SerializeWorld(manager, writer, out var sharedComponentIndices);
             sharedData = SerializeSharedComponents(manager, sharedComponentIndices);
         }
 
         public static void Deserialize(EntityManager manager, BinaryReader reader, GameObject sharedData)
         {
-            int sharedComponentCount = DeserializeSharedComponents(manager, sharedData, "");
+#if SHARED_1
+            var sharedComponentCount = DeserializeSharedComponents(manager, sharedData, "");
             var transaction = manager.BeginExclusiveEntityTransaction();
             SerializeUtility.DeserializeWorld(transaction, reader, sharedComponentCount);
             ReleaseSharedComponents(transaction, sharedComponentCount);
+#else
+            var sharedComponents = DeserializeSharedComponents(manager, sharedData, "");
+            var transaction = manager.BeginExclusiveEntityTransaction();
+            SerializeUtility.DeserializeWorld(transaction, reader, sharedComponents);
+            ReleaseSharedComponents(transaction, sharedComponents);
+#endif
             manager.EndExclusiveEntityTransaction();
         }
-
+#if SHARED_1
         public static void ReleaseSharedComponents(ExclusiveEntityTransaction transaction, int sharedComponentCount)
         {
             // Chunks have now taken over ownership of the shared components (reference counts have been added)
             // so remove the ref that was added on deserialization
             for (int i = 0; i < sharedComponentCount; ++i)
             {
-                transaction.SharedComponentDataManager.RemoveReference(i+1);
+                transaction.SharedComponentDataManager.RemoveReference(i + 1);
             }
         }
-
+#else
+        public static void ReleaseSharedComponents(ExclusiveEntityTransaction transaction, int[] sharedComponentIndices)
+        {
+            for (int i = 0; i < sharedComponentIndices.Length; ++i)
+                transaction.SharedComponentDataManager.RemoveReference(sharedComponentIndices[i]);
+        }
+#endif
         public static GameObject SerializeSharedComponents(EntityManager manager, int[] sharedComponentIndices)
         {
             if (sharedComponentIndices.Length == 0)
@@ -52,28 +64,42 @@ namespace Unity.Entities.Serialization
                     throw new ArgumentException($"{componentType} is marked with {typeof(DisallowMultipleComponent)}, but current implementation of {nameof(SerializeSharedComponents)} serializes all shared components on a single GameObject.");
 
                 var com = go.AddComponent(componentType) as ComponentDataWrapperBase;
-                #if UNITY_EDITOR
+#if UNITY_EDITOR
                 if (!EditorUtility.IsPersistent(MonoScript.FromMonoBehaviour(com)))
                 {
                     throw new ArgumentException($"SharedComponentDataWrapper<{sharedData.GetType().FullName}> must be defined in a file with the same name as the wrapper class");
                 }
-                #endif
+#endif
                 com.UpdateSerializedData(manager, sharedComponentIndices[i]);
             }
 
             return go;
         }
-
-        public static int DeserializeSharedComponents(EntityManager manager, GameObject gameobject, string debugSceneName)
+        public static
+#if SHARED_1
+        int 
+#else
+        int[]
+#endif
+        DeserializeSharedComponents(EntityManager manager, GameObject gameobject, string debugSceneName)
         {
             if (gameobject == null)
+#if SHARED_1
                 return 0;
+#else
+                return Array.Empty<int>();
+#endif
 
             manager.m_SharedComponentManager.PrepareForDeserialize();
 
             var sharedData = gameobject.GetComponents<ComponentDataWrapperBase>();
+#if !SHARED_1
+            if (sharedData.Length == 0) return Array.Empty<int>();
+            var answer = new int[sharedData.Length];
+#endif
             for (int i = 0; i != sharedData.Length; i++)
             {
+#if SHARED_1
                 int index = sharedData[i].InsertSharedComponent(manager);
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
                 if (index != i + 1)
@@ -83,9 +109,16 @@ namespace Unity.Entities.Serialization
                     throw new ArgumentException($"Shared Component {i} was inserted but got index {index} at load time than at build time when loading {debugSceneName}..\n{newComponent} vs {existingComponent}");
                 }
 #endif
-            }
+#else
+                answer[i] = sharedData[i].InsertSharedComponent(manager);
+#endif
 
+            }
+#if SHARED_1
             return sharedData.Length;
+#else
+            return answer;
+#endif
         }
     }
 }

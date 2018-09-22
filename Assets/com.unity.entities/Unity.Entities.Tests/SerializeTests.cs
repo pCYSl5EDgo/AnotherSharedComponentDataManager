@@ -75,15 +75,17 @@ namespace Unity.Entities.Tests
         public void SerializeIntoExistingWorldThrows()
         {
             m_Manager.CreateEntity(typeof(EcsTestData));
-            
-            var writer = new TestBinaryWriter();
-            int[] sharedData;
-            SerializeUtility.SerializeWorld(m_Manager, writer, out sharedData);
-            
-            var reader = new TestBinaryReader(writer);
 
-            Assert.Throws<ArgumentException>(()=>
+            var writer = new TestBinaryWriter();
+            SerializeUtility.SerializeWorld(m_Manager, writer, out var sharedData);
+
+            var reader = new TestBinaryReader(writer);
+            Assert.Throws<ArgumentException>(() =>
+#if SHARED_1
                 SerializeUtility.DeserializeWorld(m_Manager.BeginExclusiveEntityTransaction(), reader, 0)
+#else
+                SerializeUtility.DeserializeWorld(m_Manager.BeginExclusiveEntityTransaction(), reader, Array.Empty<int>())
+#endif
             );
             reader.Dispose();
         }
@@ -95,10 +97,10 @@ namespace Unity.Entities.Tests
             var e1 = CreateEntityWithDefaultData(1);
             var e2 = CreateEntityWithDefaultData(2);
             var e3 = CreateEntityWithDefaultData(3);
-            m_Manager.AddComponentData(e1, new TestComponentData1{ value = 10, referencedEntity = e2 });
-            m_Manager.AddComponentData(e2, new TestComponentData2{ value = 20, referencedEntity = e1 });
-            m_Manager.AddComponentData(e3, new TestComponentData1{ value = 30, referencedEntity = Entity.Null });
-            m_Manager.AddComponentData(e3, new TestComponentData2{ value = 40, referencedEntity = Entity.Null });
+            m_Manager.AddComponentData(e1, new TestComponentData1 { value = 10, referencedEntity = e2 });
+            m_Manager.AddComponentData(e2, new TestComponentData2 { value = 20, referencedEntity = e1 });
+            m_Manager.AddComponentData(e3, new TestComponentData1 { value = 30, referencedEntity = Entity.Null });
+            m_Manager.AddComponentData(e3, new TestComponentData2 { value = 40, referencedEntity = Entity.Null });
             m_Manager.AddBuffer<EcsIntElement>(e1);
             m_Manager.RemoveComponent<EcsTestData2>(e3);
             m_Manager.AddBuffer<EcsIntElement>(e3);
@@ -116,14 +118,16 @@ namespace Unity.Entities.Tests
             m_Manager.DestroyEntity(dummyEntity);
             var writer = new TestBinaryWriter();
 
-            int[] sharedData;
-            SerializeUtility.SerializeWorld(m_Manager, writer, out sharedData);
+            SerializeUtility.SerializeWorld(m_Manager, writer, out var sharedData);
             var reader = new TestBinaryReader(writer);
 
             var deserializedWorld = new World("SerializeEntities Test World 3");
             var entityManager = deserializedWorld.GetOrCreateManager<EntityManager>();
-
+#if SHARED_1
             SerializeUtility.DeserializeWorld(entityManager.BeginExclusiveEntityTransaction(), reader, 0);
+#else
+            SerializeUtility.DeserializeWorld(entityManager.BeginExclusiveEntityTransaction(), reader, Array.Empty<int>());
+#endif
             entityManager.EndExclusiveEntityTransaction();
 
             try
@@ -190,8 +194,8 @@ namespace Unity.Entities.Tests
 
                 Assert.IsTrue(entityManager.Exists(entityManager.GetComponentData<TestComponentData1>(new_e1).referencedEntity));
                 Assert.IsTrue(entityManager.Exists(entityManager.GetComponentData<TestComponentData2>(new_e2).referencedEntity));
-                Assert.AreEqual(new_e2 , entityManager.GetComponentData<TestComponentData1>(new_e1).referencedEntity);
-                Assert.AreEqual(new_e1 , entityManager.GetComponentData<TestComponentData2>(new_e2).referencedEntity);
+                Assert.AreEqual(new_e2, entityManager.GetComponentData<TestComponentData1>(new_e1).referencedEntity);
+                Assert.AreEqual(new_e1, entityManager.GetComponentData<TestComponentData2>(new_e2).referencedEntity);
 
                 var buf1 = entityManager.GetBuffer<EcsIntElement>(new_e1);
                 Assert.AreEqual(3, buf1.Length);
@@ -242,25 +246,27 @@ namespace Unity.Entities.Tests
 
             m_Manager.AddBuffer<TestBufferElement>(e1);
             var buffer1 = m_Manager.GetBuffer<TestBufferElement>(e1);
-            for(int i=0;i<1024;++i)
-                buffer1.Add(new TestBufferElement {entity = e2, value = 2});
+            for (int i = 0; i < 1024; ++i)
+                buffer1.Add(new TestBufferElement { entity = e2, value = 2 });
 
             m_Manager.AddBuffer<TestBufferElement>(e2);
             var buffer2 = m_Manager.GetBuffer<TestBufferElement>(e2);
-            for(int i=0;i<8;++i)
-                buffer2.Add(new TestBufferElement {entity = e1, value = 1});
+            for (int i = 0; i < 8; ++i)
+                buffer2.Add(new TestBufferElement { entity = e1, value = 1 });
 
             m_Manager.DestroyEntity(dummyEntity);
             var writer = new TestBinaryWriter();
 
-            int[] sharedData;
-            SerializeUtility.SerializeWorld(m_Manager, writer, out sharedData);
+            SerializeUtility.SerializeWorld(m_Manager, writer, out var sharedData);
             var reader = new TestBinaryReader(writer);
 
             var deserializedWorld = new World("SerializeEntities Test World 3");
             var entityManager = deserializedWorld.GetOrCreateManager<EntityManager>();
-
+#if SHARED_1
             SerializeUtility.DeserializeWorld(entityManager.BeginExclusiveEntityTransaction(), reader, 0);
+#else
+            SerializeUtility.DeserializeWorld(entityManager.BeginExclusiveEntityTransaction(), reader, Array.Empty<int>());
+#endif
             entityManager.EndExclusiveEntityTransaction();
 
             try

@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine.Assertions;
+using System.Runtime.CompilerServices;
 
 using static Unity.Mathematics.math;
 
@@ -13,7 +14,7 @@ namespace Unity.Entities
 {
     internal sealed class SharedComponentDataManager : IDisposable
     {
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static ulong CalcKey(int typeIndex, int hashCode)
         {
             var key = (ulong)typeIndex;
@@ -21,14 +22,18 @@ namespace Unity.Entities
             key |= (ulong)hashCode;
             return key;
         }
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int ModifyIndex(int typeIndex, int actualIndex)
         {
             typeIndex <<= 16;
             typeIndex |= actualIndex & 0xffff;
             return typeIndex;
         }
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+        private static bool DeconstructIndex(int index, out int typeIndex, out int actualIndex, [CallerFilePath] string CallerFilePath = "", [CallerLineNumber] int CallerLineNumber = 0)
+#else
         private static bool DeconstructIndex(int index, out int typeIndex, out int actualIndex)
+#endif
         {
             if (index == 0)
             {
@@ -37,6 +42,10 @@ namespace Unity.Entities
             }
             actualIndex = index & 0xffff;
             typeIndex = (int)(((uint)index) >> 16);
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            if (typeIndex == 0)
+                throw new ArgumentException($"{CallerFilePath}::{CallerLineNumber} => index:{index}");
+#endif
             return true;
         }
         private NativeMultiHashMap<ulong, int> indexDictionary = new NativeMultiHashMap<ulong, int>(128, Allocator.Persistent);
@@ -45,7 +54,7 @@ namespace Unity.Entities
         private static void AddFreeIndex(int index, ref NativeArray<ulong> freeIndices, ref uint maxFreeIndex)
         {
             if (index < 0) throw new ArgumentOutOfRangeException(nameof(index));
-            if (index > maxFreeIndex)
+            if (index > maxFreeIndex || maxFreeIndex == uint.MaxValue)
                 maxFreeIndex = (uint)index;
             var chunkIndex = index >> 6;
             while (freeIndices.Length <= chunkIndex)
@@ -344,7 +353,8 @@ namespace Unity.Entities
         {
             var answer = 1;
             for (int i = 0; i < dataArray.Length; i++)
-                answer += dataArray[i].versions.Length;
+                if (dataArray[i].dataList != null)
+                    answer += dataArray[i].versions.Length;
             return answer;
         }
         public int InsertSharedComponent<T>(T newData) where T : struct, ISharedComponentData => InsertSharedComponent(ref newData);
@@ -467,12 +477,27 @@ namespace Unity.Entities
             var index = FindNonDefaultSharedComponentIndex(typeIndex, CalcKey(typeIndex, FastEquality.GetHashCode(ref sharedData, typeInfo)), ref sharedData, typeInfo, tuple.dataList as List<T>);
             return index == -1 ? 0 : tuple.versions[index];
         }
-
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+        public T GetSharedComponentData<T>(int index, [CallerFilePath] string CallerFilePath = "", [CallerLineNumber]int CallerLineNumber = 0) where T : struct
+#else
         public T GetSharedComponentData<T>(int index) where T : struct
+#endif
         {
-            if (!DeconstructIndex(index, out var typeIndex, out var actualIndex))
-                return default;
-            return (this[typeIndex].dataList as List<T>)[actualIndex];
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            try
+            {
+#endif
+                if (!DeconstructIndex(index, out var typeIndex, out var actualIndex))
+                    return default;
+                return (this[typeIndex].dataList as List<T>)[actualIndex];
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            }
+            catch
+            {
+                Debug.Log(nameof(GetSharedComponentData) + $"\n    {CallerFilePath}::{CallerLineNumber}");
+                throw;
+            }
+#endif
         }
 
         public object GetSharedComponentDataBoxed(int index, int typeIndex)
@@ -491,19 +516,20 @@ namespace Unity.Entities
                 ++this[typeIndex].referenceCounts[actualIndex];
         }
 
-        public unsafe void RemoveReference(int modifiedIndex, [System.Runtime.CompilerServices.CallerFilePath] string CallerFilePath = "", [System.Runtime.CompilerServices.CallerLineNumber] int CallerLineNumber = 0)
+        public unsafe void RemoveAllReference()
+        {
+
+        }
+
+        public unsafe void RemoveReference(int modifiedIndex)
         {
             if (!DeconstructIndex(modifiedIndex, out var typeIndex, out var actualIndex)) return;
-            Debug.Log(CallerFilePath + "::" + CallerLineNumber + "::" + nameof(modifiedIndex) + "->" + modifiedIndex + ", (" + nameof(typeIndex) + ", " + nameof(actualIndex) + ")->(" + typeIndex + ", " + actualIndex + ")");
             ref var element = ref this[typeIndex];
             var newCount = --element.referenceCounts[actualIndex];
             Assert.IsTrue(newCount >= 0);
 
             if (newCount != 0)
-            {
-                Debug.Log("Remove Reference :" + newCount);
                 return;
-            }
             var typeInfo = TypeManager.GetTypeInfo(typeIndex).FastEqualityTypeInfo;
             var data = element.dataList[actualIndex];
             var ptr = PinGCObjectAndGetAddress(data, out var handle);
@@ -550,7 +576,12 @@ namespace Unity.Entities
                 {
                     var chunk = (Chunk*)c;
                     for (int i = 0; i < archetype->NumSharedComponents; ++i)
-                        chunkCount[chunk->SharedComponentValueArray[i]] += 1;
+                    {
+                        int key = chunk->SharedComponentValueArray[i];
+                        if (chunkCount.TryGetValue(key, out var val))
+                            chunkCount[key] = val + 1;
+                        else chunkCount.Add(key, 1);
+                    }
                 }
                 archetype = archetype->PrevArchetype;
             }
@@ -610,17 +641,17 @@ namespace Unity.Entities
                     else throw new Exception();
                 }
             }
-            srcSharedComponents.PrepareForDeserialize();
+            srcSharedComponents.PrepareForDeserialize_Inner();
             return remap;
         }
 
-        public void PrepareForDeserialize()
+        private void PrepareForDeserialize_Inner()
         {
             indexDictionary.Clear();
             for (int i = 0; i < dataArray.Length; i++)
             {
                 ref var element = ref dataArray[i];
-                if (element.referenceCounts.Length == 0) continue;
+                if (element.dataList == null) continue;
                 element.referenceCounts.ResizeUninitialized(0);
                 element.versions.ResizeUninitialized(0);
                 element.maxFreeIndex = uint.MaxValue;
@@ -631,6 +662,14 @@ namespace Unity.Entities
                     UnsafeUtility.MemClear(ptr, element.freeIndices.Length << 3);
                 }
             }
+        }
+        public void PrepareForDeserialize()
+        {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            if (!IsEmpty())
+                throw new System.ArgumentException("SharedComponentManager must be empty when deserializing a scene");
+#endif
+            PrepareForDeserialize_Inner();
         }
     }
 }

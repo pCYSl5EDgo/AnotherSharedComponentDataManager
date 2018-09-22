@@ -233,20 +233,16 @@ namespace Unity.Entities
         }
 
 
-        public void RemoveReference(int index, [System.Runtime.CompilerServices.CallerFilePath] string CallerFilePath = "", [System.Runtime.CompilerServices.CallerLineNumber]int CallerLineNumber = 0)
+        public void RemoveReference(int index)
         {
             if (index == 0)
                 return;
 
-            Debug.Log(CallerFilePath + "::" + CallerLineNumber + "::" + nameof(index) + "->" + index);
             var newCount = --m_SharedComponentRefCount[index];
             Assert.IsTrue(newCount >= 0);
 
             if (newCount != 0)
-            {
-                Debug.Log("Remove Reference :" + newCount);
                 return;
-            }
 
             var typeIndex = m_SharedComponentType[index];
 
