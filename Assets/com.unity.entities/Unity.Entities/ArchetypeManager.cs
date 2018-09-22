@@ -896,7 +896,11 @@ namespace Unity.Entities
         {
             [ReadOnly] public NativeArray<EntityRemapUtility.EntityRemapInfo> entityRemapping;
             [DeallocateOnJobCompletion] [ReadOnly] public NativeArray<RemapChunk> remapChunks;
+#if SHARED_1
+            [ReadOnly] public NativeArray<int> remapShared;
+#else
             [ReadOnly] public NativeHashMap<int, int> remapShared;
+#endif
 
             [NativeDisableUnsafePtrRestriction]
             public EntityDataManager* dstEntityDataManager;
@@ -911,7 +915,15 @@ namespace Unity.Entities
                 chunk->Archetype = dstArchetype;
 
                 for (int i = 0; i < dstArchetype->NumSharedComponents; ++i)
-                    chunk->SharedComponentValueArray[i] = remapShared.TryGetValue(chunk->SharedComponentValueArray[i], out var componentIndex) ? componentIndex : 0;
+                {
+#if SHARED_1
+                    chunk->SharedComponentValueArray[i] = remapShared[chunk->SharedComponentValueArray[i]];
+#else
+                    if (!remapShared.TryGetValue(chunk->SharedComponentValueArray[i], out var item))
+                        throw new Exception(chunk->SharedComponentValueArray[i].ToString());
+                    chunk->SharedComponentValueArray[i] = item;
+#endif
+                }
             }
         }
 

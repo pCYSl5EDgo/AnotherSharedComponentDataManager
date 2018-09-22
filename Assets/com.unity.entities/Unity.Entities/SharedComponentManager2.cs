@@ -7,8 +7,9 @@ using UnityEngine.Assertions;
 
 namespace Unity.Entities
 {
-    internal sealed class SharedComponentDataManager : IDisposable
+    internal sealed class SharedComponentDataManager2 : IDisposable
     {
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
         private static ulong CalcKey(int typeIndex, int hashCode)
         {
             var key = (ulong)typeIndex;
@@ -281,26 +282,6 @@ namespace Unity.Entities
             UnsafeUtility.ReleaseGCObject(handle);
             return ModifyIndex(typeIndex, index);
         }
-        internal unsafe int InsertSharedComponentAssumeNonDefault<T>(int typeIndex, int hashCode, ref T newData, FastEquality.TypeInfo typeInfo) where T : struct, ISharedComponentData
-        {
-            var index = FindNonDefaultSharedComponentIndex(typeIndex, CalcKey(typeIndex, hashCode), ref newData, typeInfo);
-
-            if (index == -1)
-            {
-                if (!dataDictionary.TryGetValue(typeIndex, out var tuple))
-                {
-                    InitializeAdd(typeIndex, CalcKey(typeIndex, hashCode), ref newData);
-                    return 1;
-                }
-                index = Add(typeIndex, hashCode, ref newData);
-            }
-            else
-            {
-                var refcounts = dataDictionary[typeIndex].referenceCounts;
-                refcounts[index] += 1;
-            }
-            return ModifyIndex(typeIndex, index);
-        }
 
         private unsafe void InitializeAdd<T>(int typeIndex, ulong key, ref T newData) where T : struct, ISharedComponentData
         {
@@ -403,16 +384,6 @@ namespace Unity.Entities
             ++refcounts[actualIndex];
         }
 
-        private static unsafe int GetHashCodeFast(object target, FastEquality.TypeInfo typeInfo)
-        {
-            ulong handle;
-            var ptr = PinGCObjectAndGetAddress(target, out handle);
-            var hashCode = FastEquality.GetHashCode(ptr, typeInfo);
-            UnsafeUtility.ReleaseGCObject(handle);
-
-            return hashCode;
-        }
-
         private static unsafe void* PinGCObjectAndGetAddress(object target, out ulong handle)
         {
             var ptr = UnsafeUtility.PinGCObjectAndGetAddress(target, out handle);
@@ -483,15 +454,17 @@ namespace Unity.Entities
             }
 
             chunkCount[0] = 1;
-            foreach (((int typeIndex, int actualIndex), int referenceCount) in chunkCount)
+            foreach ((int modifiedIndex, int referenceCount) in chunkCount)
             {
+                var typeIndex = (int)((uint)modifiedIndex >> 16);
+                var actualIndex = modifiedIndex & 0xffff;
                 if (typeIndex == 0) continue;
                 if (!dataDictionary.TryGetValue(typeIndex, out var tuple)) return false;
                 if (tuple.referenceCounts[actualIndex] != referenceCount) return false;
             }
             return true;
         }
-        public unsafe NativeHashMap<int, int> MoveAllSharedComponents(SharedComponentDataManager srcSharedComponents, Allocator allocator)
+        public unsafe NativeHashMap<int, int> MoveAllSharedComponents(SharedComponentDataManager2 srcSharedComponents, Allocator allocator)
         {
             var remapSharedModifiedSharedIndices = new NativeHashMap<int, int>(srcSharedComponents.GetSharedComponentCount(), allocator);
             remapSharedModifiedSharedIndices.TryAdd(0, 0);
@@ -553,12 +526,6 @@ namespace Unity.Entities
             }
             return remapSharedModifiedSharedIndices;
         }
-        private static unsafe ulong GetFastKey(object target, int typeIndex, FastEquality.TypeInfo typeInfo)
-        {
-            var hashCode = FastEquality.GetHashCode(PinGCObjectAndGetAddress(target, out var gcHandle), typeInfo);
-            UnsafeUtility.ReleaseGCObject(gcHandle);
-            return CalcKey(typeIndex, hashCode);
-        }
 
         public void PrepareForDeserialize()
         {
@@ -585,7 +552,7 @@ namespace Unity.Entities
         }
         public static void Deconstruct(this int index, out int typeIndex, out int actualIndex)
         {
-            actualIndex = (index & 0xffff) - 1;
+            actualIndex = index & 0xffff;
             typeIndex = (int)(((uint)index) >> 16);
         }
     }
