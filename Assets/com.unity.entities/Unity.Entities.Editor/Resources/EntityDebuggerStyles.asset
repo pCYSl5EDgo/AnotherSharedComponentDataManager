@@ -3,20 +3,20 @@
 --- !u!114 &11400000
 MonoBehaviour:
   m_ObjectHideFlags: 0
-  m_PrefabParentObject: {fileID: 0}
-  m_PrefabInternal: {fileID: 0}
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 08f85c546369d4feba08f4c4aac7a492, type: 3}
+  m_Script: {fileID: 11500000, guid: 41d4a8f3d399a764dbf02ad4fd3e6b13, type: 3}
   m_Name: EntityDebuggerStyles
   m_EditorClassIdentifier: 
   styles:
-  - m_Name: EDB Component Required
+  - m_Name: 
     m_Normal:
-      m_Background: {fileID: 2800000, guid: be6cd60ffab6b474287e370c70dc025e, type: 3}
-      m_ScaledBackgrounds:
-      - {fileID: 2800000, guid: 9ccb57e130aff40b6ab8de7e07dae017, type: 3}
+      m_Background: {fileID: 2800000, guid: 6eb646a9189887247b8eddf6e6835011, type: 3}
+      m_ScaledBackgrounds: []
       m_TextColor: {r: 0, g: 0, b: 0, a: 1}
     m_Hover:
       m_Background: {fileID: 0}
@@ -47,20 +47,20 @@ MonoBehaviour:
       m_ScaledBackgrounds: []
       m_TextColor: {r: 0, g: 0, b: 0, a: 0}
     m_Border:
-      m_Left: 7
-      m_Right: 7
-      m_Top: 7
-      m_Bottom: 7
+      m_Left: 0
+      m_Right: 0
+      m_Top: 0
+      m_Bottom: 0
     m_Margin:
-      m_Left: 2
-      m_Right: 2
-      m_Top: 1
-      m_Bottom: 1
+      m_Left: 0
+      m_Right: 0
+      m_Top: 0
+      m_Bottom: 0
     m_Padding:
-      m_Left: 6
-      m_Right: 6
-      m_Top: 1
-      m_Bottom: 1
+      m_Left: 0
+      m_Right: 0
+      m_Top: 0
+      m_Bottom: 0
     m_Overflow:
       m_Left: 0
       m_Right: 0
@@ -79,11 +79,10 @@ MonoBehaviour:
     m_FixedHeight: 15
     m_StretchWidth: 0
     m_StretchHeight: 0
-  - m_Name: EDB Component Subtractive
+  - m_Name: 
     m_Normal:
-      m_Background: {fileID: 2800000, guid: 5c5dc94ec202146e38ac04453eb79c99, type: 3}
-      m_ScaledBackgrounds:
-      - {fileID: 2800000, guid: 100faf8bf1af24fd58b397cfbe76bacb, type: 3}
+      m_Background: {fileID: 2800000, guid: dfb62efbd4744fb44ba0921882b86336, type: 3}
+      m_ScaledBackgrounds: []
       m_TextColor: {r: 0, g: 0, b: 0, a: 1}
     m_Hover:
       m_Background: {fileID: 0}
@@ -114,20 +113,20 @@ MonoBehaviour:
       m_ScaledBackgrounds: []
       m_TextColor: {r: 0, g: 0, b: 0, a: 0}
     m_Border:
-      m_Left: 10
-      m_Right: 7
-      m_Top: 7
-      m_Bottom: 7
+      m_Left: 0
+      m_Right: 0
+      m_Top: 0
+      m_Bottom: 0
     m_Margin:
-      m_Left: 2
-      m_Right: 2
-      m_Top: 1
-      m_Bottom: 1
+      m_Left: 0
+      m_Right: 0
+      m_Top: 0
+      m_Bottom: 0
     m_Padding:
-      m_Left: 11
-      m_Right: 6
-      m_Top: 1
-      m_Bottom: 1
+      m_Left: 0
+      m_Right: 0
+      m_Top: 0
+      m_Bottom: 0
     m_Overflow:
       m_Left: 0
       m_Right: 0
@@ -146,11 +145,10 @@ MonoBehaviour:
     m_FixedHeight: 15
     m_StretchWidth: 0
     m_StretchHeight: 0
-  - m_Name: EDB Component ReadOnly
+  - m_Name: 
     m_Normal:
-      m_Background: {fileID: 2800000, guid: b1f7cc32bff7e473f88f927d7c4b02ec, type: 3}
-      m_ScaledBackgrounds:
-      - {fileID: 2800000, guid: cf443572d2e634592851ed589ebe05ea, type: 3}
+      m_Background: {fileID: 2800000, guid: cc76fa5682cebc744829465143f69103, type: 3}
+      m_ScaledBackgrounds: []
       m_TextColor: {r: 0, g: 0, b: 0, a: 1}
     m_Hover:
       m_Background: {fileID: 0}
@@ -181,20 +179,20 @@ MonoBehaviour:
       m_ScaledBackgrounds: []
       m_TextColor: {r: 0, g: 0, b: 0, a: 0}
     m_Border:
-      m_Left: 10
-      m_Right: 7
-      m_Top: 7
-      m_Bottom: 7
+      m_Left: 0
+      m_Right: 0
+      m_Top: 0
+      m_Bottom: 0
     m_Margin:
-      m_Left: 2
-      m_Right: 2
-      m_Top: 1
-      m_Bottom: 1
+      m_Left: 0
+      m_Right: 0
+      m_Top: 0
+      m_Bottom: 0
     m_Padding:
-      m_Left: 11
-      m_Right: 6
-      m_Top: 1
-      m_Bottom: 1
+      m_Left: 0
+      m_Right: 0
+      m_Top: 0
+      m_Bottom: 0
     m_Overflow:
       m_Left: 0
       m_Right: 0
@@ -210,14 +208,13 @@ MonoBehaviour:
     m_ImagePosition: 0
     m_ContentOffset: {x: 0, y: 0}
     m_FixedWidth: 0
-    m_FixedHeight: 15
+    m_FixedHeight: 0
     m_StretchWidth: 0
     m_StretchHeight: 0
-  - m_Name: EDB Component ReadWrite
+  - m_Name: 
     m_Normal:
-      m_Background: {fileID: 2800000, guid: 6c23fd4be92a44866992f209c8bb4ccc, type: 3}
-      m_ScaledBackgrounds:
-      - {fileID: 2800000, guid: 9dd49e167124549df8b8b5024530ea42, type: 3}
+      m_Background: {fileID: 2800000, guid: 2bb4dd3420d02504f8d92bb5ab30c800, type: 3}
+      m_ScaledBackgrounds: []
       m_TextColor: {r: 0, g: 0, b: 0, a: 1}
     m_Hover:
       m_Background: {fileID: 0}
@@ -248,20 +245,20 @@ MonoBehaviour:
       m_ScaledBackgrounds: []
       m_TextColor: {r: 0, g: 0, b: 0, a: 0}
     m_Border:
-      m_Left: 12
-      m_Right: 7
-      m_Top: 7
-      m_Bottom: 7
+      m_Left: 0
+      m_Right: 0
+      m_Top: 0
+      m_Bottom: 0
     m_Margin:
-      m_Left: 2
-      m_Right: 2
-      m_Top: 1
-      m_Bottom: 1
+      m_Left: 0
+      m_Right: 0
+      m_Top: 0
+      m_Bottom: 0
     m_Padding:
-      m_Left: 13
-      m_Right: 6
-      m_Top: 1
-      m_Bottom: 1
+      m_Left: 0
+      m_Right: 0
+      m_Top: 0
+      m_Bottom: 0
     m_Overflow:
       m_Left: 0
       m_Right: 0

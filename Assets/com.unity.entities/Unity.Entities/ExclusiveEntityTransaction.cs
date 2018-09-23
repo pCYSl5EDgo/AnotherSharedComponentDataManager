@@ -262,7 +262,11 @@ namespace Unity.Entities
             var newSharedComponentDataIndex = sharedComponentDataManager.InsertSharedComponent(componentData);
             m_Entities->SetSharedComponentDataIndex(archetypeManager, sharedComponentDataManager, entity, typeIndex,
                 newSharedComponentDataIndex);
+#if SHARED_1
             sharedComponentDataManager.RemoveReference(newSharedComponentDataIndex);
+#else
+            sharedComponentDataManager.RemoveReference<T>(newSharedComponentDataIndex);
+#endif
         }
 
         internal void AllocateConsecutiveEntitiesForLoading(int count)

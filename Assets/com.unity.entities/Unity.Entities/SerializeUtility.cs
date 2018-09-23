@@ -21,12 +21,9 @@ namespace Unity.Entities.Serialization
         }
 
         public static int CurrentFileFormatVersion = 6;
-        public static unsafe void DeserializeWorld(ExclusiveEntityTransaction manager, BinaryReader reader,
+
 #if SHARED_1
-        int numSharedComponents)
-#else
-        int[] sharedComponents)
-#endif
+        public static unsafe void DeserializeWorld(ExclusiveEntityTransaction manager, BinaryReader reader, int numSharedComponents)
         {
             if (manager.ArchetypeManager.CountEntities() != 0)
             {
@@ -61,18 +58,10 @@ namespace Unity.Entities.Serialization
                 for (int j = 0; j < numSharedComponentsInArchetype; ++j)
                 {
                     // The shared component 0 is not part of the array, so an index equal to the array size is valid.
-#if SHARED_1
                     if (chunk->SharedComponentValueArray[j] > numSharedComponents)
-#else
-                    if (chunk->SharedComponentValueArray[j] > sharedComponents.Length)
-#endif
                     {
                         throw new ArgumentException(
-#if SHARED_1
                             $"Archetype uses shared component at index {chunk->SharedComponentValueArray[j]} but only {numSharedComponents} are available, check if the shared scene has been properly loaded.");
-#else
-                            $"Archetype uses shared component at index {chunk->SharedComponentValueArray[j]} but only {sharedComponents.Length} are available, check if the shared scene has been properly loaded.");
-#endif
                     }
                 }
 
@@ -100,15 +89,84 @@ namespace Unity.Entities.Serialization
 
                     bufferPatches.Dispose();
                 }
-#if SHARED_1
                 manager.AddExistingChunk(chunk);
-#else
-                manager.AddExistingChunk(chunk, sharedComponents);
-#endif
             }
 
             archetypes.Dispose();
         }
+#else
+        public static unsafe void DeserializeWorld(ExclusiveEntityTransaction manager, BinaryReader reader, int[] sharedComponents)
+        {
+            if (manager.ArchetypeManager.CountEntities() != 0)
+            {
+                throw new ArgumentException(
+                    $"DeserializeWorld can only be used on completely empty EntityManager. Please create a new empty World and use EntityManager.MoveEntitiesFrom to move the loaded entities into the destination world instead.");
+            }
+            int storedVersion = reader.ReadInt();
+            if (storedVersion != CurrentFileFormatVersion)
+            {
+                throw new ArgumentException(
+                    $"Attempting to read a entity scene stored in an old file format version (stored version : {storedVersion}, current version : {CurrentFileFormatVersion})");
+            }
+
+            var types = ReadTypeArray(reader);
+            int totalEntityCount;
+            var archetypes = ReadArchetypes(reader, types, manager, out totalEntityCount);
+            manager.AllocateConsecutiveEntitiesForLoading(totalEntityCount);
+
+            int totalChunkCount = reader.ReadInt();
+
+            for (int i = 0; i < totalChunkCount; ++i)
+            {
+                var chunk = (Chunk*)UnsafeUtility.Malloc(Chunk.kChunkSize, 64, Allocator.Persistent);
+                reader.ReadBytes(chunk, Chunk.kChunkSize);
+
+                chunk->Archetype = archetypes[(int)chunk->Archetype].Archetype;
+                // Fixup the pointer to the shared component values
+                // todo: more generic way of fixing up pointers?
+                chunk->SharedComponentValueArray = (int*)((byte*)(chunk) + Chunk.GetSharedComponentOffset(chunk->Archetype->NumSharedComponents));
+
+                var numSharedComponentsInArchetype = chunk->Archetype->NumSharedComponents;
+                for (int j = 0; j < numSharedComponentsInArchetype; ++j)
+                {
+                    // The shared component 0 is not part of the array, so an index equal to the array size is valid.
+                    if (chunk->SharedComponentValueArray[j] > sharedComponents.Length)
+                    {
+                        throw new ArgumentException(
+                            $"Archetype uses shared component at index {chunk->SharedComponentValueArray[j]} but only {sharedComponents.Length} are available, check if the shared scene has been properly loaded.");
+                    }
+                }
+
+                chunk->ChangeVersion = (uint*)((byte*)chunk +
+                                                Chunk.GetChangedComponentOffset(chunk->Archetype->TypesCount,
+                                                    chunk->Archetype->NumSharedComponents));
+
+                // Allocate additional heap memory for buffers that have overflown into the heap, and read their data.
+                int bufferAllocationCount = reader.ReadInt();
+                if (bufferAllocationCount > 0)
+                {
+                    var bufferPatches = new NativeArray<BufferPatchRecord>(bufferAllocationCount, Allocator.Temp);
+                    reader.ReadArray(bufferPatches, bufferPatches.Length);
+
+                    // TODO: PERF: Batch malloc interface.
+                    for (int pi = 0; pi < bufferAllocationCount; ++pi)
+                    {
+                        var target = (BufferHeader*)OffsetFromPointer(chunk->Buffer, bufferPatches[pi].ChunkOffset);
+
+                        // TODO: Alignment
+                        target->Pointer = (byte*)UnsafeUtility.Malloc(bufferPatches[pi].AllocSizeBytes, 8, Allocator.Persistent);
+
+                        reader.ReadBytes(target->Pointer, bufferPatches[pi].AllocSizeBytes);
+                    }
+
+                    bufferPatches.Dispose();
+                }
+                manager.AddExistingChunk(chunk, sharedComponents);
+            }
+
+            archetypes.Dispose();
+        }
+#endif
 
         private static unsafe NativeArray<EntityArchetype> ReadArchetypes(BinaryReader reader, NativeArray<int> types, ExclusiveEntityTransaction entityManager,
             out int totalEntityCount)
@@ -236,7 +294,6 @@ namespace Unity.Entities.Serialization
                 }
             }
 
-#if SHARED_1
             var typeArray = typeindices.Select(index =>
             {
                 var type = TypeManager.GetType(index);
@@ -251,37 +308,26 @@ namespace Unity.Entities.Serialization
                     asciiName = Encoding.ASCII.GetBytes(name)
                 };
             }).OrderBy(t => t.name).ToArray();
-#else
-            var typeArray = typeindices.Select(index =>
-            {
-                var type = TypeManager.GetType(index);
-                var name = type.AssemblyQualifiedName;
-                return (
-                    index,
-                    type,
-                    name,
-                    hash: TypeManager.GetTypeInfo(index).FastEqualityTypeInfo.Hash,
-                    asciiName: Encoding.UTF8.GetBytes(name)
-                );
-            }).OrderBy(t => t.index).ToArray();
-#endif
 
+            int typeNameBufferSize = typeArray.Sum(t => t.asciiName.Length + 1);
             writer.Write(typeArray.Length);
-
-            for (int i = 0; i < typeArray.Length; i++)
-                writer.Write(typeArray[i].hash);
-
-            writer.Write(typeArray.Sum(t => t.asciiName.Length + 1));
-
-            for (int i = 0; i < typeArray.Length; i++)
+            foreach (var n in typeArray)
             {
-                writer.Write(typeArray[i].asciiName);
+                writer.Write(n.hash);
+            }
+
+            writer.Write(typeNameBufferSize);
+            foreach (var n in typeArray)
+            {
+                writer.Write(n.asciiName);
                 writer.Write((byte)0);
             }
 
             var typeIndexMap = new Dictionary<int, int>();
             for (int i = 0; i < typeArray.Length; ++i)
-                typeIndexMap.Add(typeArray[i].index, i);
+            {
+                typeIndexMap[typeArray[i].index] = i;
+            }
 
             WriteArchetypes(writer, archetypeArray, typeIndexMap);
 
@@ -400,8 +446,8 @@ namespace Unity.Entities.Serialization
 
             sharedComponentsToSerialize = new int[sharedIndexToSerialize.Count];
 
-            foreach (var (Key, Value) in sharedIndexToSerialize)
-                sharedComponentsToSerialize[Value - 1] = Key;
+            foreach (var i in sharedIndexToSerialize)
+                sharedComponentsToSerialize[i.Value - 1] = i.Key;
         }
 
         static unsafe byte* OffsetFromPointer(void* ptr, int offset)

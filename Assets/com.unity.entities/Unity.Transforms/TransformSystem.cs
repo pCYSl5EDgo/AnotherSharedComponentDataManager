@@ -166,7 +166,7 @@ namespace Unity.Transforms
                 {
                     var entity = chunkEntities[i];
 
-                    entityCommandBuffer.AddComponent(entity, new LocalToWorld {Value = float4x4.identity});
+                    entityCommandBuffer.AddComponent(entity, new LocalToWorld { Value = float4x4.identity });
                 }
             }
 
@@ -208,19 +208,19 @@ namespace Unity.Transforms
                             }
                         }
 
-                        ParentFromEntityRW[childEntity] = new Parent {Value = parentEntity};
+                        ParentFromEntityRW[childEntity] = new Parent { Value = parentEntity };
                     }
                     else
                     {
-                        entityCommandBuffer.AddComponent(childEntity, new Parent {Value = parentEntity});
+                        entityCommandBuffer.AddComponent(childEntity, new Parent { Value = parentEntity });
                         entityCommandBuffer.AddComponent(childEntity, new Attached());
-                        entityCommandBuffer.AddComponent(childEntity, new LocalToParent {Value = float4x4.identity});
+                        entityCommandBuffer.AddComponent(childEntity, new LocalToParent { Value = float4x4.identity });
                     }
 
                     // parent wasn't previously a tree, so doesn't have depth
                     if (!IsChildTree(parentEntity))
                     {
-                        entityCommandBuffer.AddSharedComponent(parentEntity, new Depth {Value = 0});
+                        entityCommandBuffer.AddSharedComponent(parentEntity, new Depth { Value = 0 });
                     }
 
                     AddChildTree(parentEntity, childEntity);
@@ -387,7 +387,7 @@ namespace Unity.Transforms
                 var chunkAnyChanged = chunkRotationsChanged || chunkPositionsChanged || chunkScalesChanged;
 
                 if (!chunkAnyChanged)
-                  return;
+                    return;
 
                 var chunkRotationsExist = chunkRotations.Length > 0;
                 var chunkPositionsExist = chunkPositions.Length > 0;
@@ -523,7 +523,7 @@ namespace Unity.Transforms
                 var chunkAnyChanged = chunkRotationsChanged || chunkPositionsChanged || chunkScalesChanged;
 
                 if (!chunkAnyChanged)
-                  return;
+                    return;
 
                 var chunkRotationsExist = chunkRotations.Length > 0;
                 var chunkPositionsExist = chunkPositions.Length > 0;
@@ -659,7 +659,7 @@ namespace Unity.Transforms
                 var chunkAnyChanged = chunkRotationsChanged || chunkPositionsChanged || chunkScalesChanged;
 
                 if (!chunkAnyChanged)
-                  return;
+                    return;
 
                 var chunkRotationsExist = chunkRotations.Length > 0;
                 var chunkPositionsExist = chunkPositions.Length > 0;
@@ -774,7 +774,9 @@ namespace Unity.Transforms
         {
             [DeallocateOnJobCompletion] [ReadOnly] public NativeArray<int> chunkIndices;
 
-            [NativeDisableParallelForRestriction] [DeallocateOnJobCompletion] [ReadOnly]
+            [NativeDisableParallelForRestriction]
+            [DeallocateOnJobCompletion]
+            [ReadOnly]
             public NativeArray<ArchetypeChunk> chunks;
 
             [ReadOnly] public ArchetypeChunkComponentType<Parent> parentType;
@@ -818,10 +820,13 @@ namespace Unity.Transforms
         [BurstCompile]
         struct SortDepths : IJob
         {
-            [DeallocateOnJobCompletion] [NativeDisableParallelForRestriction] [ReadOnly]
+            [DeallocateOnJobCompletion]
+            [NativeDisableParallelForRestriction]
+            [ReadOnly]
             public NativeArray<int> depths;
 
-            [NativeDisableParallelForRestriction] [ReadOnly]
+            [NativeDisableParallelForRestriction]
+            [ReadOnly]
             public NativeArray<ArchetypeChunk> chunks;
 
             [ReadOnly] public ArchetypeChunkSharedComponentType<Depth> depthType;
@@ -839,7 +844,11 @@ namespace Unity.Transforms
                     for (int i = 0; i < chunks.Length; i++)
                     {
                         var chunk = chunks[i];
+#if SHARED_1
+                        var chunkDepthSharedIndex = chunk.GetSharedComponentIndex(depthType);
+#else
                         var chunkDepthSharedIndex = chunk.GetSharedComponentIndex(depthType) & 0xffff;
+#endif
                         var chunkDepth = -1;
 
                         // -1 = Depth has been removed, but still matching archetype for some reason. #todo
@@ -868,9 +877,11 @@ namespace Unity.Transforms
 
             var sharedDepths = new List<Depth>();
             var sharedDepthIndices = new List<int>();
-
+#if SHARED_1
             var sharedComponentCount = EntityManager.GetSharedComponentCount();
-
+#else
+            var sharedComponentCount = EntityManager.GetSharedComponentCount<Depth>();
+#endif
             EntityManager.GetAllUniqueSharedComponentData(sharedDepths, sharedDepthIndices);
 
             var depthCount = sharedDepths.Count;
@@ -879,14 +890,18 @@ namespace Unity.Transforms
 
             for (int i = 0; i < depthCount; i++)
             {
+#if SHARED_1
                 var index = sharedDepthIndices[i];
+#else
+                var index = sharedDepthIndices[i] & 0xffff;
+#endif
                 var depth = sharedDepths[i].Value;
                 if (depth > maxDepth)
                 {
                     maxDepth = depth;
                 }
 
-                depths[index & 0xffff] = depth;
+                depths[index] = depth;
             }
 
             var chunkIndices = new NativeArray<int>(InnerTreeLocalToWorldChunks.Length, Allocator.TempJob);
@@ -940,7 +955,7 @@ namespace Unity.Transforms
                     if (parentEntity != previousParentEntity)
                     {
                         parentLocalToWorldMatrix = localToWorldFromEntity[parentEntity].Value;
-                        previousParentEntity     = parentEntity;
+                        previousParentEntity = parentEntity;
                     }
 
                     var entity = chunkEntities[j];
@@ -1025,69 +1040,69 @@ namespace Unity.Transforms
         {
             NewRootQuery = new EntityArchetypeQuery
             {
-                Any = new ComponentType[] {typeof(Rotation), typeof(Position), typeof(Scale)},
-                None = new ComponentType[] {typeof(Frozen), typeof(Parent), typeof(LocalToWorld), typeof(Depth)},
+                Any = new ComponentType[] { typeof(Rotation), typeof(Position), typeof(Scale) },
+                None = new ComponentType[] { typeof(Frozen), typeof(Parent), typeof(LocalToWorld), typeof(Depth) },
                 All = Array.Empty<ComponentType>(),
             };
             AttachQuery = new EntityArchetypeQuery
             {
                 Any = Array.Empty<ComponentType>(),
                 None = Array.Empty<ComponentType>(),
-                All = new ComponentType[] {typeof(Attach)},
+                All = new ComponentType[] { typeof(Attach) },
             };
             DetachQuery = new EntityArchetypeQuery
             {
                 Any = Array.Empty<ComponentType>(),
-                None = new ComponentType[] {typeof(Attached)},
-                All = new ComponentType[] {typeof(Parent)},
+                None = new ComponentType[] { typeof(Attached) },
+                All = new ComponentType[] { typeof(Parent) },
             };
             PendingFrozenQuery = new EntityArchetypeQuery
             {
                 Any = Array.Empty<ComponentType>(),
-                None = new ComponentType[] {typeof(Frozen)},
-                All = new ComponentType[] {typeof(LocalToWorld), typeof(Static),typeof(PendingFrozen)},
+                None = new ComponentType[] { typeof(Frozen) },
+                All = new ComponentType[] { typeof(LocalToWorld), typeof(Static), typeof(PendingFrozen) },
             };
             FrozenQuery = new EntityArchetypeQuery
             {
                 Any = Array.Empty<ComponentType>(),
-                None = new ComponentType[] {typeof(PendingFrozen), typeof(Frozen)},
-                All = new ComponentType[] {typeof(LocalToWorld), typeof(Static)},
+                None = new ComponentType[] { typeof(PendingFrozen), typeof(Frozen) },
+                All = new ComponentType[] { typeof(LocalToWorld), typeof(Static) },
             };
             RootLocalToWorldQuery = new EntityArchetypeQuery
             {
-                Any = new ComponentType[] {typeof(Rotation), typeof(Position), typeof(Scale)},
-                None = new ComponentType[] {typeof(Frozen), typeof(Parent)},
-                All = new ComponentType[] {typeof(LocalToWorld)},
+                Any = new ComponentType[] { typeof(Rotation), typeof(Position), typeof(Scale) },
+                None = new ComponentType[] { typeof(Frozen), typeof(Parent) },
+                All = new ComponentType[] { typeof(LocalToWorld) },
             };
             InnerTreeLocalToParentQuery = new EntityArchetypeQuery
             {
-                Any = new ComponentType[] {typeof(Rotation), typeof(Position), typeof(Scale)},
-                None = new ComponentType[] {typeof(Frozen)},
-                All = new ComponentType[] {typeof(LocalToParent), typeof(Parent) },
+                Any = new ComponentType[] { typeof(Rotation), typeof(Position), typeof(Scale) },
+                None = new ComponentType[] { typeof(Frozen) },
+                All = new ComponentType[] { typeof(LocalToParent), typeof(Parent) },
             };
             LeafLocalToParentQuery = new EntityArchetypeQuery
             {
-                Any = new ComponentType[] {typeof(Rotation), typeof(Position), typeof(Scale)},
-                None = new ComponentType[] {typeof(Frozen)},
-                All = new ComponentType[] {typeof(LocalToParent), typeof(Parent)},
+                Any = new ComponentType[] { typeof(Rotation), typeof(Position), typeof(Scale) },
+                None = new ComponentType[] { typeof(Frozen) },
+                All = new ComponentType[] { typeof(LocalToParent), typeof(Parent) },
             };
             InnerTreeLocalToWorldQuery = new EntityArchetypeQuery
             {
                 Any = Array.Empty<ComponentType>(),
-                None = new ComponentType[] {typeof(Frozen)},
-                All = new ComponentType[] {typeof(Depth), typeof(LocalToParent), typeof(Parent), typeof(LocalToWorld)},
+                None = new ComponentType[] { typeof(Frozen) },
+                All = new ComponentType[] { typeof(Depth), typeof(LocalToParent), typeof(Parent), typeof(LocalToWorld) },
             };
             LeafLocalToWorldQuery = new EntityArchetypeQuery
             {
-                Any = new ComponentType[] {typeof(Rotation), typeof(Position), typeof(Scale)},
-                None = new ComponentType[] {typeof(Frozen), typeof(Depth)},
-                All = new ComponentType[] {typeof(LocalToParent), typeof(Parent)},
+                Any = new ComponentType[] { typeof(Rotation), typeof(Position), typeof(Scale) },
+                None = new ComponentType[] { typeof(Frozen), typeof(Depth) },
+                All = new ComponentType[] { typeof(LocalToParent), typeof(Parent) },
             };
             DepthQuery = new EntityArchetypeQuery
             {
                 Any = Array.Empty<ComponentType>(),
                 None = Array.Empty<ComponentType>(),
-                All = new ComponentType[] {typeof(Depth), typeof(Parent)},
+                All = new ComponentType[] { typeof(Depth), typeof(Parent) },
             };
         }
 

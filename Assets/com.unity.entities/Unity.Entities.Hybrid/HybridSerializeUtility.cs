@@ -8,26 +8,20 @@ namespace Unity.Entities.Serialization
     {
         public static void Serialize(EntityManager manager, BinaryWriter writer, out GameObject sharedData)
         {
-            SerializeUtility.SerializeWorld(manager, writer, out var sharedComponentIndices);
+            int[] sharedComponentIndices;
+            SerializeUtility.SerializeWorld(manager, writer, out sharedComponentIndices);
             sharedData = SerializeSharedComponents(manager, sharedComponentIndices);
         }
-
+#if SHARED_1
         public static void Deserialize(EntityManager manager, BinaryReader reader, GameObject sharedData)
         {
-#if SHARED_1
-            var sharedComponentCount = DeserializeSharedComponents(manager, sharedData, "");
+            int sharedComponentCount = DeserializeSharedComponents(manager, sharedData, "");
             var transaction = manager.BeginExclusiveEntityTransaction();
             SerializeUtility.DeserializeWorld(transaction, reader, sharedComponentCount);
             ReleaseSharedComponents(transaction, sharedComponentCount);
-#else
-            var sharedComponents = DeserializeSharedComponents(manager, sharedData, "");
-            var transaction = manager.BeginExclusiveEntityTransaction();
-            SerializeUtility.DeserializeWorld(transaction, reader, sharedComponents);
-            ReleaseSharedComponents(transaction, sharedComponents);
-#endif
             manager.EndExclusiveEntityTransaction();
         }
-#if SHARED_1
+
         public static void ReleaseSharedComponents(ExclusiveEntityTransaction transaction, int sharedComponentCount)
         {
             // Chunks have now taken over ownership of the shared components (reference counts have been added)
@@ -38,8 +32,19 @@ namespace Unity.Entities.Serialization
             }
         }
 #else
+        public static void Deserialize(EntityManager manager, BinaryReader reader, GameObject sharedData)
+        {
+            var sharedComponents = DeserializeSharedComponents(manager, sharedData, "");
+            var transaction = manager.BeginExclusiveEntityTransaction();
+            SerializeUtility.DeserializeWorld(transaction, reader, sharedComponents);
+            ReleaseSharedComponents(transaction, sharedComponents);
+            manager.EndExclusiveEntityTransaction();
+        }
+
         public static void ReleaseSharedComponents(ExclusiveEntityTransaction transaction, int[] sharedComponentIndices)
         {
+            // Chunks have now taken over ownership of the shared components (reference counts have been added)
+            // so remove the ref that was added on deserialization
             for (int i = 0; i < sharedComponentIndices.Length; ++i)
                 transaction.SharedComponentDataManager.RemoveReference(sharedComponentIndices[i]);
         }
@@ -75,31 +80,17 @@ namespace Unity.Entities.Serialization
 
             return go;
         }
-        public static
 #if SHARED_1
-        int 
-#else
-        int[]
-#endif
-        DeserializeSharedComponents(EntityManager manager, GameObject gameobject, string debugSceneName)
+        public static int DeserializeSharedComponents(EntityManager manager, GameObject gameobject, string debugSceneName)
         {
             if (gameobject == null)
-#if SHARED_1
                 return 0;
-#else
-                return Array.Empty<int>();
-#endif
 
             manager.m_SharedComponentManager.PrepareForDeserialize();
 
             var sharedData = gameobject.GetComponents<ComponentDataWrapperBase>();
-#if !SHARED_1
-            if (sharedData.Length == 0) return Array.Empty<int>();
-            var answer = new int[sharedData.Length];
-#endif
             for (int i = 0; i != sharedData.Length; i++)
             {
-#if SHARED_1
                 int index = sharedData[i].InsertSharedComponent(manager);
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
                 if (index != i + 1)
@@ -109,16 +100,24 @@ namespace Unity.Entities.Serialization
                     throw new ArgumentException($"Shared Component {i} was inserted but got index {index} at load time than at build time when loading {debugSceneName}..\n{newComponent} vs {existingComponent}");
                 }
 #endif
-#else
-                answer[i] = sharedData[i].InsertSharedComponent(manager);
-#endif
-
             }
-#if SHARED_1
+
             return sharedData.Length;
-#else
-            return answer;
-#endif
         }
+#else
+        public static int[] DeserializeSharedComponents(EntityManager manager, GameObject gameobject, string debugSceneName)
+        {
+            if (gameobject == null)
+                return Array.Empty<int>();
+            manager.m_SharedComponentManager.PrepareForDeserialize();
+
+            var sharedData = gameobject.GetComponents<ComponentDataWrapperBase>();
+            if (sharedData.Length == 0) return Array.Empty<int>();
+            var answer = new int[sharedData.Length];
+            for (int i = 0; i != sharedData.Length; i++)
+                answer[i] = sharedData[i].InsertSharedComponent(manager);
+            return answer;
+        }
+#endif
     }
 }

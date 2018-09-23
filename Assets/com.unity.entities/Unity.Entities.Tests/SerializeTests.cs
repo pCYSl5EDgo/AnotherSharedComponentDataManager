@@ -77,9 +77,11 @@ namespace Unity.Entities.Tests
             m_Manager.CreateEntity(typeof(EcsTestData));
 
             var writer = new TestBinaryWriter();
-            SerializeUtility.SerializeWorld(m_Manager, writer, out var sharedData);
+            int[] sharedData;
+            SerializeUtility.SerializeWorld(m_Manager, writer, out sharedData);
 
             var reader = new TestBinaryReader(writer);
+
             Assert.Throws<ArgumentException>(() =>
 #if SHARED_1
                 SerializeUtility.DeserializeWorld(m_Manager.BeginExclusiveEntityTransaction(), reader, 0)
@@ -118,7 +120,8 @@ namespace Unity.Entities.Tests
             m_Manager.DestroyEntity(dummyEntity);
             var writer = new TestBinaryWriter();
 
-            SerializeUtility.SerializeWorld(m_Manager, writer, out var sharedData);
+            int[] sharedData;
+            SerializeUtility.SerializeWorld(m_Manager, writer, out sharedData);
             var reader = new TestBinaryReader(writer);
 
             var deserializedWorld = new World("SerializeEntities Test World 3");
@@ -257,7 +260,8 @@ namespace Unity.Entities.Tests
             m_Manager.DestroyEntity(dummyEntity);
             var writer = new TestBinaryWriter();
 
-            SerializeUtility.SerializeWorld(m_Manager, writer, out var sharedData);
+            int[] sharedData;
+            SerializeUtility.SerializeWorld(m_Manager, writer, out sharedData);
             var reader = new TestBinaryReader(writer);
 
             var deserializedWorld = new World("SerializeEntities Test World 3");
@@ -267,6 +271,7 @@ namespace Unity.Entities.Tests
 #else
             SerializeUtility.DeserializeWorld(entityManager.BeginExclusiveEntityTransaction(), reader, Array.Empty<int>());
 #endif
+
             entityManager.EndExclusiveEntityTransaction();
 
             try

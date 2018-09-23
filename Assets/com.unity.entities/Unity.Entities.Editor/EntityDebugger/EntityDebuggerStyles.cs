@@ -20,7 +20,7 @@ namespace Unity.Entities.Editor
                 if (!styleAsset)
                 {
                     styleAsset = AssetDatabase.LoadAssetAtPath<GUIStyleAsset>(
-                        "Packages/com.unity.entities/Unity.Entities.Editor/Resources/EntityDebuggerStyles.asset");
+                        "Assets/com.unity.entities/Unity.Entities.Editor/Resources/EntityDebuggerStyles.asset");
                 }
 
                 return styleAsset;
