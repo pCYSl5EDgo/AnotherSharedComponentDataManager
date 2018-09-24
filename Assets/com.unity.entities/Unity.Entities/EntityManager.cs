@@ -554,12 +554,20 @@ namespace Unity.Entities
         {
             return m_SharedComponentManager.GetSharedComponentData<T>(sharedComponentIndex);
         }
-
+#if SHARED_1
         public void AddSharedComponentData<T>(Entity entity, T componentData) where T : struct, ISharedComponentData
+#else
+        public void AddSharedComponentData<T>(Entity entity, T componentData) where T : struct, ISharedComponentData, IHashable, IRefEquatable<T> => AddSharedComponentData(entity, ref componentData);
+        public void AddSharedComponentData<T>(Entity entity, ref T componentData) where T : struct, ISharedComponentData, IHashable, IRefEquatable<T>
+#endif
         {
             //TODO: optimize this (no need to move the entity to a new chunk twice)
             AddComponent(entity, ComponentType.Create<T>());
+#if SHARED_1
             SetSharedComponentData(entity, componentData);
+#else
+            SetSharedComponentData(entity, ref componentData);
+#endif
         }
 
         internal void AddSharedComponentDataBoxed(Entity entity, int typeIndex, int hashCode, object componentData)
@@ -569,22 +577,30 @@ namespace Unity.Entities
             SetSharedComponentDataBoxed(entity, typeIndex, hashCode, componentData);
         }
 
+#if SHARED_1
         public void SetSharedComponentData<T>(Entity entity, T componentData) where T : struct, ISharedComponentData
         {
             BeforeStructuralChange();
 
             var typeIndex = TypeManager.GetTypeIndex<T>();
             Entities->AssertEntityHasComponent(entity, typeIndex);
-
             var newSharedComponentDataIndex = m_SharedComponentManager.InsertSharedComponent(componentData);
-            Entities->SetSharedComponentDataIndex(ArchetypeManager, m_SharedComponentManager, entity, typeIndex,
-                newSharedComponentDataIndex);
-#if SHARED_1
+            Entities->SetSharedComponentDataIndex(ArchetypeManager, m_SharedComponentManager, entity, typeIndex, newSharedComponentDataIndex);
             m_SharedComponentManager.RemoveReference(newSharedComponentDataIndex);
-#else
-            m_SharedComponentManager.RemoveReference<T>(newSharedComponentDataIndex);
-#endif
         }
+#else
+        public void SetSharedComponentData<T>(Entity entity, T componentData) where T : struct, ISharedComponentData, IHashable, IRefEquatable<T> => SetSharedComponentData(entity, ref componentData);
+        public void SetSharedComponentData<T>(Entity entity, ref T componentData) where T : struct, ISharedComponentData, IHashable, IRefEquatable<T>
+        {
+            BeforeStructuralChange();
+
+            var typeIndex = TypeManager.GetTypeIndex<T>();
+            Entities->AssertEntityHasComponent(entity, typeIndex);
+            var newSharedComponentDataIndex = m_SharedComponentManager.InsertSharedComponent(ref componentData);
+            Entities->SetSharedComponentDataIndex(ArchetypeManager, m_SharedComponentManager, entity, typeIndex, newSharedComponentDataIndex);
+            m_SharedComponentManager.RemoveReference<T>(newSharedComponentDataIndex);
+        }
+#endif
 
         internal void SetSharedComponentDataBoxed(Entity entity, int typeIndex, int hashCode, object componentData)
         {
@@ -770,12 +786,15 @@ namespace Unity.Entities
         {
             return Entities->GetComponentTypeOrderVersion(TypeManager.GetTypeIndex<T>());
         }
-
+#if SHARED_1
         public int GetSharedComponentOrderVersion<T>(T sharedComponent) where T : struct, ISharedComponentData
         {
             return m_SharedComponentManager.GetSharedComponentVersion(sharedComponent);
         }
-
+#else
+        public int GetSharedComponentOrderVersion<T>(T sharedComponent) where T : struct, ISharedComponentData, IRefEquatable<T> => GetSharedComponentOrderVersion(ref sharedComponent);
+        public int GetSharedComponentOrderVersion<T>(ref T sharedComponent) where T : struct, ISharedComponentData, IRefEquatable<T> => m_SharedComponentManager.GetSharedComponentVersion(ref sharedComponent);
+#endif
         public ExclusiveEntityTransaction BeginExclusiveEntityTransaction()
         {
             ComponentJobSafetyManager.BeginExclusiveTransaction();

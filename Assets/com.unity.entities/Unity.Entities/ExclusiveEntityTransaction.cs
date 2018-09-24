@@ -248,8 +248,11 @@ namespace Unity.Entities
             var sharedComponentIndex = m_Entities->GetSharedComponentDataIndex(entity, typeIndex);
             return SharedComponentDataManager.GetSharedComponentData<T>(sharedComponentIndex);
         }
-
+#if SHARED_1
         public void SetSharedComponentData<T>(Entity entity, T componentData) where T : struct, ISharedComponentData
+#else
+        public void SetSharedComponentData<T>(Entity entity, T componentData) where T : struct, ISharedComponentData, IRefEquatable<T>, IHashable
+#endif
         {
             CheckAccess();
 
@@ -258,13 +261,13 @@ namespace Unity.Entities
 
             var archetypeManager = ArchetypeManager;
             var sharedComponentDataManager = SharedComponentDataManager;
-
-            var newSharedComponentDataIndex = sharedComponentDataManager.InsertSharedComponent(componentData);
-            m_Entities->SetSharedComponentDataIndex(archetypeManager, sharedComponentDataManager, entity, typeIndex,
-                newSharedComponentDataIndex);
 #if SHARED_1
+            var newSharedComponentDataIndex = sharedComponentDataManager.InsertSharedComponent(componentData);
+            m_Entities->SetSharedComponentDataIndex(archetypeManager, sharedComponentDataManager, entity, typeIndex, newSharedComponentDataIndex);
             sharedComponentDataManager.RemoveReference(newSharedComponentDataIndex);
 #else
+            var newSharedComponentDataIndex = sharedComponentDataManager.InsertSharedComponent(ref componentData);
+            m_Entities->SetSharedComponentDataIndex(archetypeManager, sharedComponentDataManager, entity, typeIndex, newSharedComponentDataIndex);
             sharedComponentDataManager.RemoveReference<T>(newSharedComponentDataIndex);
 #endif
         }

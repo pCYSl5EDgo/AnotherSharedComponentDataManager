@@ -49,6 +49,9 @@ namespace Unity.Entities.Tests
     }
 
     public struct EcsTestSharedComp : ISharedComponentData
+#if !SHARED_1
+    , IRefEquatable<EcsTestSharedComp>, IHashable
+#endif
     {
         public int value;
 
@@ -56,9 +59,19 @@ namespace Unity.Entities.Tests
         {
             value = inValue;
         }
+#if !SHARED_1
+        public ulong HashCode => (ulong)value;
+
+        public bool Equals(ref EcsTestSharedComp other) => value == other.value;
+
+        public bool Equals(EcsTestSharedComp other) => value == other.value;
+#endif
     }
 
     public struct EcsTestSharedComp2 : ISharedComponentData
+#if !SHARED_1
+    , IHashable, IRefEquatable<EcsTestSharedComp2>
+#endif
     {
         public int value0;
         public int value1;
@@ -67,6 +80,13 @@ namespace Unity.Entities.Tests
         {
             value0 = value1 = inValue;
         }
+#if !SHARED_1
+        ulong IHashable.HashCode => ((ulong)(value0) << 32) | (ulong)value1;
+
+        public bool Equals(ref EcsTestSharedComp2 other) => value0 == other.value0 && value1 == other.value1;
+
+        public bool Equals(EcsTestSharedComp2 other) => value0 == other.value0 && value1 == other.value1;
+#endif
     }
 
     public struct EcsTestDataEntity : IComponentData
@@ -82,6 +102,9 @@ namespace Unity.Entities.Tests
     }
 
     public struct EcsTestSharedCompEntity : ISharedComponentData
+#if !SHARED_1
+    , IHashable, IRefEquatable<EcsTestSharedCompEntity>
+#endif
     {
         public Entity value;
 
@@ -89,7 +112,13 @@ namespace Unity.Entities.Tests
         {
             value = inValue;
         }
+#if !SHARED_1
+        public ulong HashCode => (ulong)value.Index;
 
+        public bool Equals(ref EcsTestSharedCompEntity other) => value.Index == other.value.Index && value.Version == other.value.Version;
+
+        public bool Equals(EcsTestSharedCompEntity other) => value.Index == other.value.Index && value.Version == other.value.Version;
+#endif
     }
 
     struct EcsState1 : ISystemStateComponentData
@@ -112,7 +141,7 @@ namespace Unity.Entities.Tests
 
         public static implicit operator EcsIntElement(int e)
         {
-            return new EcsIntElement {Value = e};
+            return new EcsIntElement { Value = e };
         }
 
         public int Value;

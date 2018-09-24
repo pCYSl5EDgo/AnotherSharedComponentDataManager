@@ -65,7 +65,7 @@ namespace Unity.Entities
             return TryGetEntityAndManager(out entityManager, out entity)
                    && entityManager.HasComponent(entity, GetComponentType());
         }
-        
+
         public void OnValidate()
         {
             EntityManager entityManager;
@@ -73,7 +73,7 @@ namespace Unity.Entities
             if (CanSynchronizeWithEntityManager(out entityManager, out entity))
                 UpdateComponentData(entityManager, entity);
         }
-        
+
         public void OnBeforeSerialize()
         {
             EntityManager entityManager;
@@ -104,7 +104,7 @@ namespace Unity.Entities
             set
             {
                 m_SerializedData = value;
-                
+
                 EntityManager entityManager;
                 Entity entity;
 
@@ -124,13 +124,13 @@ namespace Unity.Entities
             if (!ComponentType.Create<T>().IsZeroSized)
                 manager.SetComponentData(entity, m_SerializedData);
         }
-        
+
         internal override void UpdateSerializedData(EntityManager manager, Entity entity)
         {
             if (!ComponentType.Create<T>().IsZeroSized)
                 m_SerializedData = manager.GetComponentData<T>(entity);
         }
-        
+
         internal override int InsertSharedComponent(EntityManager manager)
         {
             throw new InvalidOperationException();
@@ -144,6 +144,9 @@ namespace Unity.Entities
 
     //@TODO: This should be fully implemented in C++ for efficiency
     public abstract class SharedComponentDataWrapper<T> : ComponentDataWrapperBase where T : struct, ISharedComponentData
+#if !SHARED_1
+    , IHashable, IRefEquatable<T>
+#endif
     {
         [SerializeField, WrappedComponentData]
         T m_SerializedData;
@@ -157,7 +160,7 @@ namespace Unity.Entities
             set
             {
                 m_SerializedData = value;
-                
+
                 EntityManager entityManager;
                 Entity entity;
 
@@ -174,9 +177,13 @@ namespace Unity.Entities
 
         internal override void UpdateComponentData(EntityManager manager, Entity entity)
         {
+#if SHARED_1
             manager.SetSharedComponentData(entity, m_SerializedData);
+#else
+            manager.SetSharedComponentData(entity, ref m_SerializedData);
+#endif
         }
-        
+
         internal override void UpdateSerializedData(EntityManager manager, Entity entity)
         {
             m_SerializedData = manager.GetSharedComponentData<T>(entity);
@@ -184,7 +191,11 @@ namespace Unity.Entities
 
         internal override int InsertSharedComponent(EntityManager manager)
         {
+#if SHARED_1
             return manager.m_SharedComponentManager.InsertSharedComponent(m_SerializedData);
+#else
+            return manager.m_SharedComponentManager.InsertSharedComponent(ref m_SerializedData);
+#endif
         }
 
         internal override void UpdateSerializedData(EntityManager manager, int sharedComponentIndex)
@@ -274,7 +285,7 @@ namespace Unity.Entities
 
         protected virtual void OnEnable()
         {
-            #if UNITY_EDITOR
+#if UNITY_EDITOR
             if (World.Active == null)
             {
                 // * OnDisable (Serialize monobehaviours in temporary backup)
@@ -291,7 +302,7 @@ namespace Unity.Entities
                     // But we really need to solve this at the root. The execution order is kind if crazy.
                     if (!EditorApplication.isPlaying)
                         return;
-                    
+
                     Debug.LogError("Loading GameObjectEntity in Playmode but there is no active World");
                     return;
                 }
@@ -304,7 +315,7 @@ namespace Unity.Entities
 #endif
                 }
             }
-            #endif
+#endif
 
             EntityManager = World.Active.GetOrCreateManager<EntityManager>();
             Entity = AddToEntityManager(EntityManager, gameObject);

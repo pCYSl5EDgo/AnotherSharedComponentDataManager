@@ -25,13 +25,23 @@ namespace Unity.Entities.Tests
             public int Integer
             {
                 get { return Value.Value; }
-                set { Value = new MockData {Value = value}; }
+                set { Value = new MockData { Value = value }; }
             }
         }
 
         struct MockSharedData : ISharedComponentData
+#if !SHARED_1
+        , IHashable, IRefEquatable<MockSharedData>
+#endif
         {
             public int Value;
+#if !SHARED_1
+            public ulong HashCode => (ulong)Value;
+
+            public bool Equals(ref MockSharedData other) => Value == other.Value;
+
+            public bool Equals(MockSharedData other) => Value == other.Value;
+#endif
         }
 
         class MockSharedWrapper : SharedComponentDataWrapper<MockSharedData>, IIntegerContainer
@@ -39,7 +49,7 @@ namespace Unity.Entities.Tests
             public int Integer
             {
                 get { return Value.Value; }
-                set { Value = new MockSharedData {Value = value}; }
+                set { Value = new MockSharedData { Value = value }; }
             }
         }
 

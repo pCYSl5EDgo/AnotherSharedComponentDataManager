@@ -199,12 +199,41 @@ namespace Unity.Entities
 
         public T CreateManager<T>(params object[] constructorArgumnents) where T : ScriptBehaviourManager
         {
-            return (T) CreateManagerInternal(typeof(T), constructorArgumnents);
+            return (T)CreateManagerInternal(typeof(T), constructorArgumnents);
         }
+
+#if !SHARED_1
+        public T CreateManager<T>(T manager) where T : ScriptBehaviourManager => manager == null ? throw new ArgumentNullException() : CreateManagerInternal(manager);
+
+        private T CreateManagerInternal<T>(T manager) where T : ScriptBehaviourManager
+        {
+#if ENABLE_UNITY_COLLECTIONS_CHECKS
+            if (!m_AllowGetManager)
+                throw new ArgumentException(
+                    "During destruction of a system you are not allowed to create more systems.");
+#endif
+            m_AllowGetManager = true;
+            m_BehaviourManagers.Add(manager);
+            AddTypeLookup(typeof(T), manager);
+
+            try
+            {
+                manager.CreateInstance(this);
+            }
+            catch
+            {
+                RemoveManagerInteral(manager);
+                throw;
+            }
+
+            ++Version;
+            return manager;
+        }
+#endif
 
         public T GetOrCreateManager<T>() where T : ScriptBehaviourManager
         {
-            return (T) GetOrCreateManagerInternal(typeof(T));
+            return (T)GetOrCreateManagerInternal(typeof(T));
         }
 
         public ScriptBehaviourManager GetOrCreateManager(Type type)
@@ -214,7 +243,7 @@ namespace Unity.Entities
 
         public T GetExistingManager<T>() where T : ScriptBehaviourManager
         {
-            return (T) GetExistingManagerInternal(typeof(T));
+            return (T)GetExistingManagerInternal(typeof(T));
         }
 
         public ScriptBehaviourManager GetExistingManager(Type type)

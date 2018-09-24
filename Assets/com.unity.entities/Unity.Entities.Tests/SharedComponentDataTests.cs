@@ -7,17 +7,35 @@ using Unity.Entities;
 namespace Unity.Entities.Tests
 {
     struct SharedData1 : ISharedComponentData
+#if !SHARED_1
+    , IHashable, IRefEquatable<SharedData1>
+#endif
     {
         public int value;
 
         public SharedData1(int val) { value = val; }
+#if !SHARED_1
+        public ulong HashCode => (ulong)value;
+
+        public bool Equals(ref SharedData1 other) => value == other.value;
+
+        public bool Equals(SharedData1 other) => value == other.value;
+#endif
     }
 
     struct SharedData2 : ISharedComponentData
+#if !SHARED_1
+    , IHashable, IRefEquatable<SharedData2>
+#endif
     {
         public int value;
 
         public SharedData2(int val) { value = val; }
+#if !SHARED_1
+        public ulong HashCode => (ulong)value;
+        public bool Equals(ref SharedData2 other) => value == other.value;
+        public bool Equals(SharedData2 other) => value == other.value;
+#endif
     }
 
     public class SharedComponentDataTests : ECSTestsFixture
@@ -86,11 +104,11 @@ namespace Unity.Entities.Tests
             var archetype2 = m_Manager.CreateArchetype(typeof(SharedData1), typeof(EcsTestData), typeof(SharedData2));
 
             const int entitiesPerValue = 5000;
-            for (int i = 0; i < entitiesPerValue*8; ++i)
+            for (int i = 0; i < entitiesPerValue * 8; ++i)
             {
                 Entity e = m_Manager.CreateEntity((i % 2 == 0) ? archetype1 : archetype2);
                 m_Manager.SetComponentData(e, new EcsTestData(i));
-                m_Manager.SetSharedComponentData(e, new SharedData1(i%8));
+                m_Manager.SetSharedComponentData(e, new SharedData1(i % 8));
             }
 
             var group = m_Manager.CreateComponentGroup(typeof(EcsTestData), typeof(SharedData1));
@@ -105,8 +123,8 @@ namespace Unity.Entities.Tests
                 {
                     int index = componentArray[i].value;
                     Assert.AreEqual(sharedValue, index % 8);
-                    Assert.IsFalse(foundEntities[index/8]);
-                    foundEntities[index/8] = true;
+                    Assert.IsFalse(foundEntities[index / 8]);
+                    foundEntities[index / 8] = true;
                 }
             }
 
@@ -173,7 +191,7 @@ namespace Unity.Entities.Tests
             Assert.AreEqual(0, m_Manager.GetSharedComponentData<SharedData1>(e).value);
 
             m_Manager.SetSharedComponentData(e, new SharedData1(17));
-            m_Manager.AddComponentData(e, new EcsTestData2 {value0 = 1, value1 = 2});
+            m_Manager.AddComponentData(e, new EcsTestData2 { value0 = 1, value1 = 2 });
 
             Assert.AreEqual(17, m_Manager.GetSharedComponentData<SharedData1>(e).value);
         }
@@ -240,11 +258,11 @@ namespace Unity.Entities.Tests
             var archetype2 = m_Manager.CreateArchetype(typeof(SharedData1), typeof(EcsTestData), typeof(SharedData2));
 
             const int entitiesPerValue = 5000;
-            for (int i = 0; i < entitiesPerValue*8; ++i)
+            for (int i = 0; i < entitiesPerValue * 8; ++i)
             {
                 Entity e = m_Manager.CreateEntity((i % 2 == 0) ? archetype1 : archetype2);
                 m_Manager.SetComponentData(e, new EcsTestData(i));
-                m_Manager.SetSharedComponentData(e, new SharedData1(i%8));
+                m_Manager.SetSharedComponentData(e, new SharedData1(i % 8));
             }
 
             var group = m_Manager.CreateComponentGroup(typeof(EcsTestData), typeof(SharedData1));
@@ -255,16 +273,16 @@ namespace Unity.Entities.Tests
             var sharedComponentDataArray = group.GetSharedComponentDataArray<SharedData1>();
             var componentArray = group.GetComponentDataArray<EcsTestData>();
 
-            Assert.AreEqual(entitiesPerValue*8, sharedComponentDataArray.Length);
-            Assert.AreEqual(entitiesPerValue*8, componentArray.Length);
+            Assert.AreEqual(entitiesPerValue * 8, sharedComponentDataArray.Length);
+            Assert.AreEqual(entitiesPerValue * 8, componentArray.Length);
 
-            for (int i = 0; i < entitiesPerValue*8; ++i)
+            for (int i = 0; i < entitiesPerValue * 8; ++i)
             {
                 var sharedValue = sharedComponentDataArray[i].value;
                 int index = componentArray[i].value;
                 Assert.AreEqual(sharedValue, index % 8);
-                Assert.IsFalse(foundEntities[sharedValue, index/8]);
-                foundEntities[sharedValue, index/8] = true;
+                Assert.IsFalse(foundEntities[sharedValue, index / 8]);
+                foundEntities[sharedValue, index / 8] = true;
             }
 
             group.Dispose();
@@ -302,13 +320,13 @@ namespace Unity.Entities.Tests
 
             var query0 = new EntityArchetypeQuery
             {
-                All = new ComponentType[] {typeof(SharedData1)},
+                All = new ComponentType[] { typeof(SharedData1) },
                 Any = Array.Empty<ComponentType>(),
                 None = Array.Empty<ComponentType>()
             };
             var query1 = new EntityArchetypeQuery
             {
-                All = new ComponentType[] {typeof(SharedData2)},
+                All = new ComponentType[] { typeof(SharedData2) },
                 Any = Array.Empty<ComponentType>(),
                 None = Array.Empty<ComponentType>()
             };
