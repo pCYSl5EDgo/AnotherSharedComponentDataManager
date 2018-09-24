@@ -22,13 +22,9 @@ namespace Unity.Entities
             key |= (ulong)hashCode;
             return key;
         }
+        private const int LSHIFT = 18;
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int ModifyIndex(int typeIndex, int actualIndex)
-        {
-            typeIndex <<= 16;
-            typeIndex |= actualIndex & 0xffff;
-            return typeIndex;
-        }
+        private static int ModifyIndex(int typeIndex, int actualIndex) => (typeIndex << LSHIFT) ^ actualIndex;
         private static bool DeconstructIndex(int index, out int typeIndex, out int actualIndex)
         {
             if (index == 0)
@@ -36,8 +32,18 @@ namespace Unity.Entities
                 typeIndex = actualIndex = 0;
                 return false;
             }
-            actualIndex = index & 0xffff;
-            typeIndex = (int)(((uint)index) >> 16);
+            actualIndex = index & 0x3ffff;
+            typeIndex = (int)(((uint)index) >> LSHIFT);
+            return true;
+        }
+        private static bool DeconstructIndex(int index, int typeIndex, out int actualIndex)
+        {
+            if (index == 0)
+            {
+                actualIndex = 0;
+                return false;
+            }
+            actualIndex = index ^ (typeIndex << LSHIFT);
             return true;
         }
         private NativeMultiHashMap<ulong, int> indexDictionary = new NativeMultiHashMap<ulong, int>(128, Allocator.Persistent);
@@ -494,13 +500,14 @@ namespace Unity.Entities
         }
         public T GetSharedComponentData<T>(int index) where T : struct
         {
-            if (DeconstructIndex(index, out var typeIndex, out var actualIndex))
+            var typeIndex = TypeManager.GetTypeIndex<T>();
+            if (DeconstructIndex(index, typeIndex, out var actualIndex))
                 return (Accessor(typeIndex).dataList as List<T>)[actualIndex];
             return default;
         }
 
         public object GetSharedComponentDataBoxed(int index, int typeIndex)
-            => DeconstructIndex(index, out var typeIndex2, out var actualIndex) ? (typeIndex == typeIndex2 ? Accessor(typeIndex).dataList[actualIndex] : throw new Exception()) : Activator.CreateInstance(TypeManager.GetType(typeIndex));
+            => DeconstructIndex(index, typeIndex, out var actualIndex) ? Accessor(typeIndex).dataList[actualIndex] : Activator.CreateInstance(TypeManager.GetType(typeIndex));
 
         public object GetSharedComponentDataNonDefaultBoxed(int index)
         {
@@ -517,7 +524,8 @@ namespace Unity.Entities
 
         public unsafe void RemoveReference<T>(int modifiedIndex) where T : struct, ISharedComponentData
         {
-            if (!DeconstructIndex(modifiedIndex, out var typeIndex, out var actualIndex)) return;
+            var typeIndex = TypeManager.GetTypeIndex<T>();
+            if (!DeconstructIndex(modifiedIndex, typeIndex, out var actualIndex)) return;
             ref var element = ref Accessor(typeIndex);
             var newCount = --element.referenceCounts[actualIndex];
             Assert.IsTrue(newCount >= 0);
@@ -654,7 +662,7 @@ namespace Unity.Entities
                 {
                     var dstIndex = InsertSharedComponentAssumeNonDefault(typeIndex, tuple.dataList[j], typeInfo, tuple.dataList);
                     remap.TryAdd(ModifyIndex(typeIndex, j), dstIndex);
-                    if (DeconstructIndex(dstIndex, out _, out var actualIndex))
+                    if (DeconstructIndex(dstIndex, typeIndex, out var actualIndex))
                         thisRefCounts[actualIndex] += tuple.referenceCounts[j] - 1;
                     else throw new Exception();
                 }

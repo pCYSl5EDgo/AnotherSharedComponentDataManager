@@ -331,7 +331,7 @@ namespace Unity.Entities
             SharedComponent2 sharedComponent2)
 #if SHARED_1
             where SharedComponent1 : struct, ISharedComponentData
-            where sharedComponent2 : struct, ISharedComponentData
+            where SharedComponent2 : struct, ISharedComponentData
 #else
             where SharedComponent1 : struct, ISharedComponentData, IHashable, IRefEquatable<SharedComponent1>
             where SharedComponent2 : struct, ISharedComponentData, IHashable, IRefEquatable<SharedComponent2>
