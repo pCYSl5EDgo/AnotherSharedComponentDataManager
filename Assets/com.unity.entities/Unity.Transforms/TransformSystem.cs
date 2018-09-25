@@ -856,7 +856,7 @@ namespace Unity.Transforms
 #if SHARED_1
                         var chunkDepthSharedIndex = chunk.GetSharedComponentIndex(depthType);
 #else
-                        var chunkDepthSharedIndex = chunk.GetSharedComponentIndex(depthType) & 0xffff;
+                        var chunkDepthSharedIndex = chunk.GetSharedComponentIndex(depthType) & 0x3ffff;
 #endif
                         var chunkDepth = -1;
 
@@ -902,7 +902,7 @@ namespace Unity.Transforms
 #if SHARED_1
                 var index = sharedDepthIndices[i];
 #else
-                var index = sharedDepthIndices[i] & 0xffff;
+                var index = sharedDepthIndices[i] & 0x3ffff;
 #endif
                 var depth = sharedDepths[i].Value;
                 if (depth > maxDepth)
