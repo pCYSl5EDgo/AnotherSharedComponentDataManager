@@ -78,8 +78,8 @@ namespace Unity.Entities
         public ECBChunk* m_Tail;
         public ECBChunk* m_Head;
         public EntitySharedComponentCommand* m_CleanupList;
-        public CreateCommand*                m_PrevCreateCommand;
-        public EntityCommand*                m_PrevEntityCommand;
+        public CreateCommand* m_PrevCreateCommand;
+        public EntityCommand* m_PrevEntityCommand;
         public EntityCommandBufferChain* m_NextChain;
         public int m_LastSortIndex;
 
@@ -129,7 +129,7 @@ namespace Unity.Entities
                 m_Heap[BaseIndex + i].SortIndex = chainStates[i].NextSortIndex;
                 m_Heap[BaseIndex + i].ChainIndex = i;
             }
-            for (int i = m_Size/2 - 1; i >= 0; --i)
+            for (int i = m_Size / 2 - 1; i >= 0; --i)
             {
                 m_Heap[BaseIndex + i].SortIndex = chainStates[i].NextSortIndex;
                 m_Heap[BaseIndex + i].ChainIndex = i;
@@ -146,7 +146,7 @@ namespace Unity.Entities
             //Assert.IsTrue(!Empty, "Can't Peek() an empty heap");
             if (Empty)
             {
-                return new ECBChainHeapElement{ ChainIndex = -1, SortIndex = -1};
+                return new ECBChainHeapElement { ChainIndex = -1, SortIndex = -1 };
             }
             return m_Heap[BaseIndex];
         }
@@ -155,7 +155,7 @@ namespace Unity.Entities
             //Assert.IsTrue(!Empty, "Can't Pop() an empty heap");
             if (Empty)
             {
-                return new ECBChainHeapElement{ ChainIndex = -1, SortIndex = -1};
+                return new ECBChainHeapElement { ChainIndex = -1, SortIndex = -1 };
             }
             ECBChainHeapElement top = Peek();
             m_Heap[BaseIndex] = m_Heap[m_Size--];
@@ -180,7 +180,7 @@ namespace Unity.Entities
             while (i <= m_Size / 2)
             {
                 int child = 2 * i;
-                if (child < m_Size && (m_Heap[child+1].SortIndex < m_Heap[child].SortIndex))
+                if (child < m_Size && (m_Heap[child + 1].SortIndex < m_Heap[child].SortIndex))
                 {
                     child++;
                 }
@@ -274,7 +274,7 @@ namespace Unity.Entities
             // PERF: It's be great if we had a way to actually get the number of worst-case threads so we didn't have to allocate 128.
             int allocSize = sizeof(EntityCommandBufferChain) * JobsUtility.MaxJobThreadCount;
 
-            m_ThreadedChains = (EntityCommandBufferChain*) UnsafeUtility.Malloc(allocSize, JobsUtility.CacheLineSize, m_Allocator);
+            m_ThreadedChains = (EntityCommandBufferChain*)UnsafeUtility.Malloc(allocSize, JobsUtility.CacheLineSize, m_Allocator);
             UnsafeUtility.MemClear(m_ThreadedChains, allocSize);
         }
 
@@ -295,9 +295,9 @@ namespace Unity.Entities
             {
                 ++chain->m_PrevCreateCommand->BatchCount;
 
-                var data = (CreateCommand*) Reserve(chain, jobIndex, sizeof(CreateCommand));
+                var data = (CreateCommand*)Reserve(chain, jobIndex, sizeof(CreateCommand));
 
-                data->Header.CommandType = (int) op;
+                data->Header.CommandType = (int)op;
                 data->Header.TotalSize = sizeof(CreateCommand);
                 data->Header.SortIndex = chain->m_LastSortIndex;
                 data->Archetype = archetype;
@@ -305,9 +305,9 @@ namespace Unity.Entities
             }
             else
             {
-                var data = (CreateCommand*) Reserve(chain, jobIndex, sizeof(CreateCommand));
+                var data = (CreateCommand*)Reserve(chain, jobIndex, sizeof(CreateCommand));
 
-                data->Header.CommandType = (int) op;
+                data->Header.CommandType = (int)op;
                 data->Header.TotalSize = sizeof(CreateCommand);
                 data->Header.SortIndex = chain->m_LastSortIndex;
                 data->Archetype = archetype;
@@ -325,9 +325,9 @@ namespace Unity.Entities
             {
                 ++chain->m_PrevEntityCommand->BatchCount;
 
-                var data = (EntityCommand*) Reserve(chain, jobIndex, sizeof(EntityCommand));
+                var data = (EntityCommand*)Reserve(chain, jobIndex, sizeof(EntityCommand));
 
-                data->Header.CommandType = (int) op;
+                data->Header.CommandType = (int)op;
                 data->Header.TotalSize = sizeof(EntityCommand);
                 data->Header.SortIndex = chain->m_LastSortIndex;
                 data->Entity = e;
@@ -335,9 +335,9 @@ namespace Unity.Entities
             }
             else
             {
-                var data = (EntityCommand*) Reserve(chain, jobIndex, sizeof(EntityCommand));
+                var data = (EntityCommand*)Reserve(chain, jobIndex, sizeof(EntityCommand));
 
-                data->Header.CommandType = (int) op;
+                data->Header.CommandType = (int)op;
                 data->Header.TotalSize = sizeof(EntityCommand);
                 data->Header.SortIndex = chain->m_LastSortIndex;
                 data->Entity = e;
@@ -438,7 +438,7 @@ namespace Unity.Entities
             int newSortIndex = jobIndex;
             if (newSortIndex < chain->m_LastSortIndex)
             {
-                EntityCommandBufferChain* archivedChain = (EntityCommandBufferChain*) UnsafeUtility.Malloc(sizeof(EntityCommandBufferChain), 8, m_Allocator);
+                EntityCommandBufferChain* archivedChain = (EntityCommandBufferChain*)UnsafeUtility.Malloc(sizeof(EntityCommandBufferChain), 8, m_Allocator);
                 *archivedChain = *chain;
                 UnsafeUtility.MemClear(chain, sizeof(EntityCommandBufferChain));
                 chain->m_NextChain = archivedChain;
@@ -746,20 +746,34 @@ namespace Unity.Entities
 
 
         private static bool IsDefaultObject<T>(ref T component, out int hashCode) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<T>
+#endif
         {
+#if REF_EQUATABLE
+            hashCode = component.GetHashCode();
+            return default(T).Equals(ref component);
+#else
             var typeIndex = TypeManager.GetTypeIndex<T>();
             var typeInfo = TypeManager.GetTypeInfo(typeIndex).FastEqualityTypeInfo;
             var defaultValue = default(T);
             hashCode = FastEquality.GetHashCode(ref component, typeInfo);
             return FastEquality.Equals(ref defaultValue, ref component, typeInfo);
+#endif
         }
 
         public void AddSharedComponent<T>(T component) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+            , IRefEquatable<T>
+#endif
         {
             AddSharedComponent(Entity.Null, component);
         }
 
         public void AddSharedComponent<T>(Entity e, T component) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+            , IRefEquatable<T>
+#endif
         {
             EnforceSingleThreadOwnership();
             int hashCode;
@@ -770,11 +784,17 @@ namespace Unity.Entities
         }
 
         public void SetSharedComponent<T>(T component) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+            , IRefEquatable<T>
+#endif
         {
             SetSharedComponent(Entity.Null, component);
         }
 
         public void SetSharedComponent<T>(Entity e, T component) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+            , IRefEquatable<T>
+#endif
         {
             EnforceSingleThreadOwnership();
             int hashCode;
@@ -1057,7 +1077,7 @@ namespace Unity.Entities
                 concurrent.m_Data->InitConcurrentAccess();
             }
 
-            return concurrent;           
+            return concurrent;
         }
 
         /// <summary>
@@ -1091,7 +1111,8 @@ namespace Unity.Entities
 
             private EntityCommandBufferChain* ThreadChain
             {
-                get {
+                get
+                {
 #if ENABLE_UNITY_COLLECTIONS_CHECKS
                     if (m_ThreadIndex == -1)
                     {
@@ -1125,7 +1146,7 @@ namespace Unity.Entities
                 m_Data->AddEntityCommand(chain, jobIndex, ECBCommand.InstantiateEntity, e);
                 chain->TemporaryForceDisableBatching();
             }
-        
+
             public void DestroyEntity(int jobIndex, Entity e)
             {
                 CheckWriteAccess();
@@ -1203,11 +1224,17 @@ namespace Unity.Entities
             }
 
             public void AddSharedComponent<T>(int jobIndex, T component) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+            , IRefEquatable<T>
+#endif
             {
                 AddSharedComponent(jobIndex, Entity.Null, component);
             }
 
             public void AddSharedComponent<T>(int jobIndex, Entity e, T component) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+            , IRefEquatable<T>
+#endif
             {
                 CheckWriteAccess();
                 var chain = ThreadChain;
@@ -1219,11 +1246,17 @@ namespace Unity.Entities
             }
 
             public void SetSharedComponent<T>(int jobIndex, T component) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+            , IRefEquatable<T>
+#endif
             {
                 SetSharedComponent(jobIndex, Entity.Null, component);
             }
 
             public void SetSharedComponent<T>(int jobIndex, Entity e, T component) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+            , IRefEquatable<T>
+#endif
             {
                 CheckWriteAccess();
                 var chain = ThreadChain;

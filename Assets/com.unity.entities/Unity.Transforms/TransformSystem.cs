@@ -34,8 +34,17 @@ namespace Unity.Transforms
     /// Read-only from external systems.
     /// </summary>
     public struct Depth : ISystemStateSharedComponentData
+#if REF_EQUATABLE
+    , IRefEquatable<Depth>
+#endif
     {
         public int Value;
+#if REF_EQUATABLE
+        public bool Equals(ref Depth other) => Value == other.Value;
+        public bool Equals(Depth other) => Value == other.Value;
+        public override bool Equals(object obj) => obj != null && ((Depth)obj).Value == Value;
+        public override int GetHashCode() => Value;
+#endif
     }
 
     /// <summary>
