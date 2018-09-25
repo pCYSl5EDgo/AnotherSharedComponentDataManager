@@ -15,6 +15,6 @@ public sealed class TestHelper : EditorWindow
     [MenuItem("Window/Helper/EditSettings &#d")]
     public static void EditSettings()
     {
-        EditorApplication.ExecuteMenuItem("Edit/SEttings");
+        EditorApplication.ExecuteMenuItem("Edit/Settings");
     }
 }
