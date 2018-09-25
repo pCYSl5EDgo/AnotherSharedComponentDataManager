@@ -49,17 +49,18 @@ namespace Unity.Entities.Tests
 
 
         public struct SharedData : ISharedComponentData
-#if !SHARED_1
-    , IHashable, IRefEquatable<SharedData>
+#if REF_EQUATABLE
+    , IRefEquatable<SharedData>
 #endif
         {
             public int value;
 
             public SharedData(int val) { value = val; }
-#if !SHARED_1
-        public ulong HashCode => (ulong)value;
+#if REF_EQUATABLE
         public bool Equals(ref SharedData other) => value == other.value;
         public bool Equals(SharedData other) => value == other.value;
+        public override bool Equals(object obj) => obj != null && ((SharedData)obj).value == value;
+        public override int GetHashCode() => value;
 #endif
         }
 

@@ -5,17 +5,16 @@ namespace Unity.Entities.Tests
 {
     [Serializable]
     public struct MockSharedDisallowMultiple : ISharedComponentData
-#if !SHARED_1
-    , IHashable, IRefEquatable<MockSharedDisallowMultiple>
+#if REF_EQUATABLE
+    , IRefEquatable<MockSharedDisallowMultiple>
 #endif
     {
         public int Value;
-#if !SHARED_1
-        public ulong HashCode => (ulong)Value;
-
+#if REF_EQUATABLE
         public bool Equals(ref MockSharedDisallowMultiple other) => Value == other.Value;
-
         public bool Equals(MockSharedDisallowMultiple other) => Value == other.Value;
+        public override bool Equals(object obj) => obj != null && ((MockSharedDisallowMultiple)obj).Value == Value;
+        public override int GetHashCode() => Value;
 #endif
     }
 

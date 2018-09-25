@@ -251,7 +251,17 @@ namespace Unity.Entities
 #if SHARED_1
         public void SetSharedComponentData<T>(Entity entity, T componentData) where T : struct, ISharedComponentData
 #else
-        public void SetSharedComponentData<T>(Entity entity, T componentData) where T : struct, ISharedComponentData, IRefEquatable<T>, IHashable
+        public void SetSharedComponentData<T>(Entity entity, T componentData) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+
+        , IRefEquatable<T>
+#endif
+            => SetSharedComponentData<T>(entity, ref componentData);
+        public void SetSharedComponentData<T>(Entity entity, ref T componentData) where T : struct, ISharedComponentData
+#endif
+#if REF_EQUATABLE
+
+    , IRefEquatable<T>
 #endif
         {
             CheckAccess();

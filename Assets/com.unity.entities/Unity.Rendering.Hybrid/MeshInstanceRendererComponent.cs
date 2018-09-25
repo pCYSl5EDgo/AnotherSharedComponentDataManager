@@ -11,8 +11,8 @@ namespace Unity.Rendering
     /// </summary>
     [Serializable]
     public struct MeshInstanceRenderer : ISharedComponentData
-#if !SHARED_1
-    , IHashable, IRefEquatable<MeshInstanceRenderer>
+#if REF_EQUATABLE
+    , IRefEquatable<MeshInstanceRenderer>
 #endif
     {
         public Mesh mesh;
@@ -21,10 +21,17 @@ namespace Unity.Rendering
 
         public ShadowCastingMode castShadows;
         public bool receiveShadows;
-#if !SHARED_1
-        public ulong HashCode => ((ulong)mesh?.GetHashCode() << 32) | ((ulong)material?.GetHashCode()) ^ (ulong)castShadows ^ (receiveShadows ? ulong.MaxValue : 0);
+#if REF_EQUATABLE
         public bool Equals(ref MeshInstanceRenderer other) => mesh == other.mesh && material == other.material && castShadows == other.castShadows && receiveShadows == other.receiveShadows;
         public bool Equals(MeshInstanceRenderer other) => mesh == other.mesh && material == other.material && castShadows == other.castShadows && receiveShadows == other.receiveShadows;
+        public override bool Equals(object obj) => obj != null && ((MeshInstanceRenderer)obj).Equals(ref this);
+        static MeshInstanceRenderer()
+        {
+            TypeManager.Initialize();
+            typeInfo = TypeManager.GetTypeInfo<MeshInstanceRenderer>().FastEqualityTypeInfo;
+        }
+        private static readonly FastEquality.TypeInfo typeInfo;
+        public override unsafe int GetHashCode() => FastEquality.GetHashCode(Unity.Collections.LowLevel.Unsafe.UnsafeUtility.AddressOf<MeshInstanceRenderer>(ref this), typeInfo);
 #endif
     }
 

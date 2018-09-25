@@ -49,8 +49,8 @@ namespace Unity.Entities.Tests
     }
 
     public struct EcsTestSharedComp : ISharedComponentData
-#if !SHARED_1
-    , IRefEquatable<EcsTestSharedComp>, IHashable
+#if REF_EQUATABLE
+    , IRefEquatable<EcsTestSharedComp>
 #endif
     {
         public int value;
@@ -59,18 +59,17 @@ namespace Unity.Entities.Tests
         {
             value = inValue;
         }
-#if !SHARED_1
-        public ulong HashCode => (ulong)value;
-
+#if REF_EQUATABLE
         public bool Equals(ref EcsTestSharedComp other) => value == other.value;
-
         public bool Equals(EcsTestSharedComp other) => value == other.value;
+        public override bool Equals(object obj) => obj != null && ((EcsTestSharedComp)obj).value == value;
+        public override int GetHashCode() => value;
 #endif
     }
 
     public struct EcsTestSharedComp2 : ISharedComponentData
-#if !SHARED_1
-    , IHashable, IRefEquatable<EcsTestSharedComp2>
+#if REF_EQUATABLE
+    , IRefEquatable<EcsTestSharedComp2>
 #endif
     {
         public int value0;
@@ -80,12 +79,12 @@ namespace Unity.Entities.Tests
         {
             value0 = value1 = inValue;
         }
-#if !SHARED_1
-        ulong IHashable.HashCode => ((ulong)(value0) << 32) | (ulong)value1;
+#if REF_EQUATABLE
 
         public bool Equals(ref EcsTestSharedComp2 other) => value0 == other.value0 && value1 == other.value1;
-
         public bool Equals(EcsTestSharedComp2 other) => value0 == other.value0 && value1 == other.value1;
+        public override bool Equals(object obj) => obj != null && ((EcsTestSharedComp2)obj).Equals(ref this);
+        public override int GetHashCode() => value0 ^ value1;
 #endif
     }
 
@@ -102,8 +101,8 @@ namespace Unity.Entities.Tests
     }
 
     public struct EcsTestSharedCompEntity : ISharedComponentData
-#if !SHARED_1
-    , IHashable, IRefEquatable<EcsTestSharedCompEntity>
+#if REF_EQUATABLE
+    , IRefEquatable<EcsTestSharedCompEntity>
 #endif
     {
         public Entity value;
@@ -112,12 +111,11 @@ namespace Unity.Entities.Tests
         {
             value = inValue;
         }
-#if !SHARED_1
-        public ulong HashCode => (ulong)value.Index;
-
+#if REF_EQUATABLE
         public bool Equals(ref EcsTestSharedCompEntity other) => value.Index == other.value.Index && value.Version == other.value.Version;
-
         public bool Equals(EcsTestSharedCompEntity other) => value.Index == other.value.Index && value.Version == other.value.Version;
+        public override bool Equals(object obj) => obj != null && ((EcsTestSharedCompEntity)obj).Equals(ref this);
+        public override int GetHashCode() => value.Index;
 #endif
     }
 

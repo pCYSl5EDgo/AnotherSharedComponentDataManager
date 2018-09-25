@@ -144,8 +144,8 @@ namespace Unity.Entities
 
     //@TODO: This should be fully implemented in C++ for efficiency
     public abstract class SharedComponentDataWrapper<T> : ComponentDataWrapperBase where T : struct, ISharedComponentData
-#if !SHARED_1
-    , IHashable, IRefEquatable<T>
+#if REF_EQUATABLE
+    , IRefEquatable<T>
 #endif
     {
         [SerializeField, WrappedComponentData]

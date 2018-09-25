@@ -9,15 +9,18 @@ namespace おう考えてやるからあくしろよテスト
     {
         void Start()
         {
+#if !UNITY_DISABLE_AUTOMATIC_SYSTEM_BOOTSTRAP
+            World.DisposeAllWorlds();
+#endif
             var worlds = new World[1];
             ref var world = ref worlds[0];
-            world = new World("ECS完全に理解したテストワールド");
+            World.Active = world = new World("ECS完全に理解したテストワールド");
             var manager = world.CreateManager<EntityManager>();
             InitializeEntities(manager);
-            world.CreateManager(typeof(ChangeSharedValueSystem));
+            world.CreateManager(typeof(ChangeSharedValueSystem), ValueArray);
             ScriptBehaviourUpdateOrder.UpdatePlayerLoop(worlds);
         }
-        private static readonly ulong[] Array = new ulong[]{
+        private static readonly ulong[] ValueArray = new ulong[]{
             0,
             1,
             2,
@@ -45,11 +48,13 @@ namespace おう考えてやるからあくしろよテスト
                     entities[0] = manager.CreateEntity(archetype);
                     manager.Instantiate(entities[0], skipFirstEntityArray);
                     TEST t = default;
+                    t.Value = ValueArray[0];
+                    manager.SetSharedComponentData(entities[0], t);
                     for (int i = 0, j = 0; i < entities.Length; ++i, ++j)
                     {
-                        if (j == Array.Length)
+                        if (j == ValueArray.Length)
                             j = 0;
-                        t.Value = Array[j];
+                        t.Value = ValueArray[j];
                         manager.SetSharedComponentData(entities[i], t);
                     }
                 }

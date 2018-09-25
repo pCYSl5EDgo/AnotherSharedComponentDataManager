@@ -1,34 +1,19 @@
-﻿using System;
-using Unity.Entities;
+﻿using Unity.Entities;
 using Unity.Jobs;
+using Unity.Profiling;
 using Unity.Collections;
-using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
-
-using random = System.Random;
 
 namespace おう考えてやるからあくしろよテスト
 {
     public sealed class ChangeSharedValueSystem : ComponentSystem
     {
         private ComponentGroup group;
-        private readonly System.Diagnostics.Stopwatch stopwatch = new System.Diagnostics.Stopwatch();
-        private readonly ulong[] Array = new ulong[]{
-            0,
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            7,
-            8,
-            9,
-            ulong.MaxValue,
-        };
+        private readonly ulong[] ValueArray;
+        public ChangeSharedValueSystem() => this.ValueArray = System.Array.Empty<ulong>();
+        public ChangeSharedValueSystem(ulong[] ValueArray) => this.ValueArray = ValueArray;
         protected override void OnCreateManager() => group = GetComponentGroup(ComponentType.Create<TEST>());
-        private int count;
-        private long time;
+        private readonly ProfilerMarker profilerMarker = new ProfilerMarker("Set SharedComponent");
         protected override void OnUpdate()
         {
             var manager = EntityManager;
@@ -39,41 +24,20 @@ namespace おう考えてやるからあくしろよテスト
                 Source = group.GetEntityArray(),
                 Results = array
             }.Schedule(array.Length, 16).Complete();
-            stopwatch.Restart();
-            for (int x = 0; x < 10; ++x)
+            using (profilerMarker.Auto())
             {
-                for (int i = 0, j = 0; i < array.Length; i++, j += 3)
+                for (int x = 0; x < 10; ++x)
                 {
-                    if (j >= Array.Length)
-                        j -= Array.Length;
-                    t.Value = Array[j];
-#if SHARED_1
-                    manager.SetSharedComponentData(array[i], t);
-#else
-                    manager.SetSharedComponentData(array[i], ref t);
-#endif
+                    for (int i = 0, j = 0; i < array.Length; i++, j += 3)
+                    {
+                        if (j >= ValueArray.Length)
+                            j -= ValueArray.Length;
+                        t.Value = ValueArray[j];
+                        manager.SetSharedComponentData(array[i], t);
+                    }
                 }
             }
-            stopwatch.Stop();
             array.Dispose();
-            time += stopwatch.ElapsedMilliseconds;
-            Debug.Log(stopwatch.ElapsedMilliseconds);
-            if (count++ == 30)
-            {
-                count = 0;
-                Debug.Log(time.ToString() + "/30");
-                time = 0;
-            }
         }
     }
 }
-/*
- SHARED_1
- 14566/30
- 16148/30
-
- !SHARED_1
- 12103/30
- 11901/30
- 11910/30
- */

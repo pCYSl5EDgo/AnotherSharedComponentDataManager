@@ -7,34 +7,34 @@ using Unity.Entities;
 namespace Unity.Entities.Tests
 {
     struct SharedData1 : ISharedComponentData
-#if !SHARED_1
-    , IHashable, IRefEquatable<SharedData1>
+#if REF_EQUATABLE
+    , IRefEquatable<SharedData1>
 #endif
     {
         public int value;
 
         public SharedData1(int val) { value = val; }
-#if !SHARED_1
-        public ulong HashCode => (ulong)value;
-
+#if REF_EQUATABLE
         public bool Equals(ref SharedData1 other) => value == other.value;
-
         public bool Equals(SharedData1 other) => value == other.value;
+        public override bool Equals(object obj) => obj != null && ((SharedData1)obj).value == value;
+        public override int GetHashCode() => value;
 #endif
     }
 
     struct SharedData2 : ISharedComponentData
-#if !SHARED_1
-    , IHashable, IRefEquatable<SharedData2>
+#if REF_EQUATABLE
+    , IRefEquatable<SharedData2>
 #endif
     {
         public int value;
 
         public SharedData2(int val) { value = val; }
-#if !SHARED_1
-        public ulong HashCode => (ulong)value;
+#if REF_EQUATABLE
         public bool Equals(ref SharedData2 other) => value == other.value;
         public bool Equals(SharedData2 other) => value == other.value;
+        public override bool Equals(object obj) => obj != null && ((SharedData2)obj).value == value;
+        public override int GetHashCode() => value;
 #endif
     }
 

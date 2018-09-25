@@ -30,17 +30,16 @@ namespace Unity.Entities.Tests
         }
 
         struct MockSharedData : ISharedComponentData
-#if !SHARED_1
-        , IHashable, IRefEquatable<MockSharedData>
+#if REF_EQUATABLE
+        , IRefEquatable<MockSharedData>
 #endif
         {
             public int Value;
-#if !SHARED_1
-            public ulong HashCode => (ulong)Value;
-
+#if REF_EQUATABLE
             public bool Equals(ref MockSharedData other) => Value == other.Value;
-
             public bool Equals(MockSharedData other) => Value == other.Value;
+            public override bool Equals(object obj) => obj != null && ((MockSharedData)obj).Value == Value;
+            public override int GetHashCode() => Value;
 #endif
         }
 

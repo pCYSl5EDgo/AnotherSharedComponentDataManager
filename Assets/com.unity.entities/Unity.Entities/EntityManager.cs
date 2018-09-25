@@ -557,8 +557,15 @@ namespace Unity.Entities
 #if SHARED_1
         public void AddSharedComponentData<T>(Entity entity, T componentData) where T : struct, ISharedComponentData
 #else
-        public void AddSharedComponentData<T>(Entity entity, T componentData) where T : struct, ISharedComponentData, IHashable, IRefEquatable<T> => AddSharedComponentData(entity, ref componentData);
-        public void AddSharedComponentData<T>(Entity entity, ref T componentData) where T : struct, ISharedComponentData, IHashable, IRefEquatable<T>
+        public void AddSharedComponentData<T>(Entity entity, T componentData) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<T>
+#endif
+            => AddSharedComponentData(entity, ref componentData);
+        public void AddSharedComponentData<T>(Entity entity, ref T componentData) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<T>
+#endif
 #endif
         {
             //TODO: optimize this (no need to move the entity to a new chunk twice)
@@ -589,8 +596,15 @@ namespace Unity.Entities
             m_SharedComponentManager.RemoveReference(newSharedComponentDataIndex);
         }
 #else
-        public void SetSharedComponentData<T>(Entity entity, T componentData) where T : struct, ISharedComponentData, IHashable, IRefEquatable<T> => SetSharedComponentData(entity, ref componentData);
-        public void SetSharedComponentData<T>(Entity entity, ref T componentData) where T : struct, ISharedComponentData, IHashable, IRefEquatable<T>
+        public void SetSharedComponentData<T>(Entity entity, T componentData) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<T>
+#endif
+            => SetSharedComponentData(entity, ref componentData);
+        public void SetSharedComponentData<T>(Entity entity, ref T componentData) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<T>
+#endif
         {
             BeforeStructuralChange();
 
@@ -610,8 +624,11 @@ namespace Unity.Entities
 
             var newSharedComponentDataIndex = 0;
             if (componentData != null) // null means default
-                newSharedComponentDataIndex = m_SharedComponentManager.InsertSharedComponentAssumeNonDefault(typeIndex,
-                    hashCode, componentData, TypeManager.GetTypeInfo(typeIndex).FastEqualityTypeInfo);
+#if REF_EQUATABLE
+                newSharedComponentDataIndex = m_SharedComponentManager.InsertSharedComponentAssumeNonDefault(typeIndex, hashCode, componentData);
+#else
+                newSharedComponentDataIndex = m_SharedComponentManager.InsertSharedComponentAssumeNonDefault(typeIndex, hashCode, componentData, TypeManager.GetTypeInfo(typeIndex).FastEqualityTypeInfo);
+#endif
 
             Entities->SetSharedComponentDataIndex(ArchetypeManager, m_SharedComponentManager, entity, typeIndex,
                 newSharedComponentDataIndex);
@@ -792,8 +809,16 @@ namespace Unity.Entities
             return m_SharedComponentManager.GetSharedComponentVersion(sharedComponent);
         }
 #else
-        public int GetSharedComponentOrderVersion<T>(T sharedComponent) where T : struct, ISharedComponentData, IRefEquatable<T> => GetSharedComponentOrderVersion(ref sharedComponent);
-        public int GetSharedComponentOrderVersion<T>(ref T sharedComponent) where T : struct, ISharedComponentData, IRefEquatable<T> => m_SharedComponentManager.GetSharedComponentVersion(ref sharedComponent);
+        public int GetSharedComponentOrderVersion<T>(T sharedComponent) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<T>
+#endif
+         => GetSharedComponentOrderVersion(ref sharedComponent);
+        public int GetSharedComponentOrderVersion<T>(ref T sharedComponent) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<T>
+#endif
+         => m_SharedComponentManager.GetSharedComponentVersion(ref sharedComponent);
 #endif
         public ExclusiveEntityTransaction BeginExclusiveEntityTransaction()
         {

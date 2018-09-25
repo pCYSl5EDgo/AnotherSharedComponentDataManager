@@ -357,13 +357,87 @@ namespace Unity.Entities
         }
         public int GetSharedComponentCount<T>() => Accessor(TypeManager.GetTypeIndex<T>()).versions.Length + 1;
 
-        public int InsertSharedComponent<T>(ref T newData) where T : struct, ISharedComponentData, IRefEquatable<T>, IHashable
+#if REF_EQUATABLE
+        public int InsertSharedComponent<T>(ref T newData) where T : struct, ISharedComponentData, IRefEquatable<T>
         {
             if (default(T).Equals(ref newData))
                 return 0;
 
             var typeIndex = TypeManager.GetTypeIndex<T>();
+
+            var hashCode = newData.GetHashCode();
+            ref var element = ref Accessor(typeIndex);
+            var index = FindNonDefaultSharedComponentIndex(typeIndex, CalcKey(typeIndex, hashCode), ref newData, element.dataList as List<T>);
+            if (index != -1)
+            {
+                ++element.referenceCounts[index];
+                return ModifyIndex(typeIndex, index);
+            }
+            return ModifyIndex(typeIndex, Add(typeIndex, hashCode, ref newData, ref element));
+        }
+        private unsafe int FindNonDefaultSharedComponentIndex<T>(int typeIndex, ulong key, ref T newData, List<T> list) where T : struct, ISharedComponentData, IRefEquatable<T>
+        {
+            if (!indexDictionary.TryGetFirstValue(key, out var itemIndex, out var iter))
+                return -1;
+            do
+            {
+                if (list[itemIndex].Equals(ref newData))
+                    return itemIndex;
+            } while (indexDictionary.TryGetNextValue(out itemIndex, ref iter));
+            return -1;
+        }
+        internal unsafe int InsertSharedComponentAssumeNonDefault(int typeIndex, int hashCode, object newData)
+        {
+            // ReAlloc(typeIndex);
+            ref var element = ref Accessor(typeIndex);
+            return InsertSharedComponentAssumeNonDefault(typeIndex, hashCode, newData, element.dataList, ref element.referenceCounts);
+        }
+        internal unsafe int InsertSharedComponentAssumeNonDefault(int typeIndex, object newData, IList list)
+        {
+            // ReAlloc(typeIndex);
+            return InsertSharedComponentAssumeNonDefault(typeIndex, newData.GetHashCode(), newData, list, ref Accessor(typeIndex).referenceCounts);
+        }
+        internal unsafe int InsertSharedComponentAssumeNonDefault(int typeIndex, int hashCode, object newData, IList list, ref NativeList<int> referenceCounts)
+        {
+            var key = CalcKey(typeIndex, hashCode);
+            var index = FindNonDefaultSharedComponentIndex(typeIndex, key, newData, list);
+            if (index == -1)
+                index = Add(typeIndex, hashCode, newData);
+            else
+                referenceCounts[index] += 1;
+            return ModifyIndex(typeIndex, index);
+        }
+        private unsafe int FindNonDefaultSharedComponentIndex(int typeIndex, ulong key, object newData, IList list)
+        {
+            if (!indexDictionary.TryGetFirstValue(key, out var itemIndex, out var iter))
+                return -1;
+            do
+            {
+                if (newData.Equals(list[itemIndex]))
+                    return itemIndex;
+            } while (indexDictionary.TryGetNextValue(out itemIndex, ref iter));
+            return -1;
+        }
+        public int GetSharedComponentVersion<T>(ref T sharedData) where T : struct, ISharedComponentData, IRefEquatable<T>
+        {
+            if (default(T).Equals(ref sharedData))
+                return 0;
+            var typeIndex = TypeManager.GetTypeIndex<T>();
+            ref var tuple = ref Accessor(typeIndex);
+            var index = FindNonDefaultSharedComponentIndex(typeIndex, CalcKey(typeIndex, sharedData.GetHashCode()), ref sharedData, tuple.dataList as List<T>);
+            return index == -1 ? 0 : tuple.versions[index];
+        }
+#else
+        public int InsertSharedComponent<T>(ref T newData) where T : struct, ISharedComponentData
+        {
+            var typeIndex = TypeManager.GetTypeIndex<T>();
             var typeInfo = TypeManager.GetTypeInfo(typeIndex).FastEqualityTypeInfo;
+            {
+                T defaultVal = default;
+                if (FastEquality.Equals(ref defaultVal, ref newData, typeInfo))
+                    return 0;
+            }
+
 
             var hashCode = FastEquality.GetHashCode(ref newData, typeInfo);
             ref var element = ref Accessor(typeIndex);
@@ -391,18 +465,18 @@ namespace Unity.Entities
             } while (indexDictionary.TryGetNextValue(out itemIndex, ref iter));
             return -1;
         }
-        private unsafe int FindNonDefaultSharedComponentIndex<T>(int typeIndex, ulong key, ref T newData, FastEquality.TypeInfo typeInfo, List<T> list) where T : struct, ISharedComponentData, IRefEquatable<T>
+        private unsafe int FindNonDefaultSharedComponentIndex<T>(int typeIndex, ulong key, ref T newData, FastEquality.TypeInfo typeInfo, List<T> list) where T : struct, ISharedComponentData
         {
             if (!indexDictionary.TryGetFirstValue(key, out var itemIndex, out var iter))
                 return -1;
             do
             {
-                if (list[itemIndex].Equals(ref newData))
+                var data = list[itemIndex];
+                if (FastEquality.Equals(ref newData, ref data, typeInfo))
                     return itemIndex;
             } while (indexDictionary.TryGetNextValue(out itemIndex, ref iter));
             return -1;
         }
-
         internal unsafe int InsertSharedComponentAssumeNonDefault(int typeIndex, int hashCode, object newData, FastEquality.TypeInfo typeInfo)
         {
             // ReAlloc(typeIndex);
@@ -430,6 +504,20 @@ namespace Unity.Entities
                 referenceCounts[index] += 1;
             return ModifyIndex(typeIndex, index);
         }
+        public int GetSharedComponentVersion<T>(ref T sharedData) where T : struct, ISharedComponentData
+        {
+            var typeIndex = TypeManager.GetTypeIndex<T>();
+            var typeInfo = TypeManager.GetTypeInfo(typeIndex).FastEqualityTypeInfo;
+            {
+                T defaultVal = default;
+                if (FastEquality.Equals(ref defaultVal, ref sharedData, typeInfo))
+                    return 0;
+            }
+            ref var tuple = ref Accessor(typeIndex);
+            var index = FindNonDefaultSharedComponentIndex(typeIndex, CalcKey(typeIndex, FastEquality.GetHashCode(ref sharedData, typeInfo)), ref sharedData, typeInfo, tuple.dataList as List<T>);
+            return index == -1 ? 0 : tuple.versions[index];
+        }
+#endif
 
         private static unsafe void* PinGCObjectAndGetAddress(object target, out ulong handle) => (byte*)UnsafeUtility.PinGCObjectAndGetAddress(target, out handle) + TypeManager.ObjectOffset;
 
@@ -487,17 +575,12 @@ namespace Unity.Entities
                 ++Accessor(typeIndex).versions[actualIndex];
         }
 
-        public int GetSharedComponentVersion<T>(T sharedData) where T : struct, ISharedComponentData, IRefEquatable<T> => GetSharedComponentVersion(ref sharedData);
-        public int GetSharedComponentVersion<T>(ref T sharedData) where T : struct, ISharedComponentData, IRefEquatable<T>
-        {
-            if (default(T).Equals(ref sharedData))
-                return 0;
-            var typeIndex = TypeManager.GetTypeIndex<T>();
-            var typeInfo = TypeManager.GetTypeInfo(typeIndex).FastEqualityTypeInfo;
-            ref var tuple = ref Accessor(typeIndex);
-            var index = FindNonDefaultSharedComponentIndex(typeIndex, CalcKey(typeIndex, FastEquality.GetHashCode(ref sharedData, typeInfo)), ref sharedData, typeInfo, tuple.dataList as List<T>);
-            return index == -1 ? 0 : tuple.versions[index];
-        }
+        public int GetSharedComponentVersion<T>(T sharedData) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<T>
+#endif
+        => GetSharedComponentVersion(ref sharedData);
+
         public T GetSharedComponentData<T>(int index) where T : struct
         {
             var typeIndex = TypeManager.GetTypeIndex<T>();
@@ -532,9 +615,12 @@ namespace Unity.Entities
 
             if (newCount != 0)
                 return;
-            var typeInfo = TypeManager.GetTypeInfo(typeIndex).FastEqualityTypeInfo;
             var data = (element.dataList as List<T>)[actualIndex];
-            var hashCode = FastEquality.GetHashCode(ref data, typeInfo);
+#if REF_EQUATABLE
+            var hashCode = data.GetHashCode();
+#else
+            var hashCode = FastEquality.GetHashCode(ref data, TypeManager.GetTypeInfo(typeIndex).FastEqualityTypeInfo);
+#endif
             AddFreeIndex(actualIndex, ref element.freeIndices, ref element.maxFreeIndex);
 
             if (!indexDictionary.TryGetFirstValue(CalcKey(typeIndex, hashCode), out var itemIndex, out var iter))
@@ -571,11 +657,15 @@ namespace Unity.Entities
 
             if (newCount != 0)
                 return;
-            var typeInfo = TypeManager.GetTypeInfo(typeIndex).FastEqualityTypeInfo;
             var data = element.dataList[actualIndex];
+#if REF_EQUATABLE
+            var hashCode = data.GetHashCode();
+#else
+            var typeInfo = TypeManager.GetTypeInfo(typeIndex).FastEqualityTypeInfo;
             var ptr = PinGCObjectAndGetAddress(data, out var handle);
             var hashCode = FastEquality.GetHashCode(ptr, typeInfo);
             UnsafeUtility.ReleaseGCObject(handle);
+#endif
 
             AddFreeIndex(actualIndex, ref element.freeIndices, ref element.maxFreeIndex);
             if (!indexDictionary.TryGetFirstValue(CalcKey(typeIndex, hashCode), out var itemIndex, out var iter))
@@ -644,8 +734,31 @@ namespace Unity.Entities
             return true;
         }
 
-
-
+#if REF_EQUATABLE
+        internal unsafe NativeHashMap<int, int> MoveAllSharedComponents(SharedComponentDataManager srcSharedComponents, Allocator allocator)
+        {
+            var remap = new NativeHashMap<int, int>(srcSharedComponents.GetSharedComponentCount(), allocator);
+            remap.TryAdd(0, 0);
+            var srcArray = srcSharedComponents.dataArray;
+            for (int i = 0; i < srcArray.Length; i++)
+            {
+                ref var tuple = ref srcArray[i];
+                if (tuple.dataList == null) continue;
+                var typeIndex = SharedComponentTypeStart + i;
+                ref var thisRefCounts = ref Accessor(typeIndex).referenceCounts;
+                for (int j = 0, count = tuple.dataList.Count; j < count; j++)
+                {
+                    var dstIndex = InsertSharedComponentAssumeNonDefault(typeIndex, tuple.dataList[j], tuple.dataList);
+                    remap.TryAdd(ModifyIndex(typeIndex, j), dstIndex);
+                    if (DeconstructIndex(dstIndex, typeIndex, out var actualIndex))
+                        thisRefCounts[actualIndex] += tuple.referenceCounts[j] - 1;
+                    else throw new Exception();
+                }
+            }
+            srcSharedComponents.PrepareForDeserialize_Inner();
+            return remap;
+        }
+#else
         internal unsafe NativeHashMap<int, int> MoveAllSharedComponents(SharedComponentDataManager srcSharedComponents, Allocator allocator)
         {
             var remap = new NativeHashMap<int, int>(srcSharedComponents.GetSharedComponentCount(), allocator);
@@ -670,7 +783,7 @@ namespace Unity.Entities
             srcSharedComponents.PrepareForDeserialize_Inner();
             return remap;
         }
-
+#endif
         private void PrepareForDeserialize_Inner()
         {
             indexDictionary.Clear();

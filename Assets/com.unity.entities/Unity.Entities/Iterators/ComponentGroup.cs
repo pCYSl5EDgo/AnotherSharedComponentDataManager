@@ -306,10 +306,9 @@ namespace Unity.Entities
         }
 
         public void SetFilter<SharedComponent1>(SharedComponent1 sharedComponent1)
-#if SHARED_1
             where SharedComponent1 : struct, ISharedComponentData
-#else
-            where SharedComponent1 : struct, ISharedComponentData, IHashable, IRefEquatable<SharedComponent1>
+#if REF_EQUATABLE
+            , IRefEquatable<SharedComponent1>
 #endif
         {
             var sm = ArchetypeManager.GetSharedComponentDataManager();
@@ -329,12 +328,13 @@ namespace Unity.Entities
 
         public void SetFilter<SharedComponent1, SharedComponent2>(SharedComponent1 sharedComponent1,
             SharedComponent2 sharedComponent2)
-#if SHARED_1
             where SharedComponent1 : struct, ISharedComponentData
+#if REF_EQUATABLE
+            , IRefEquatable<SharedComponent1>
+#endif
             where SharedComponent2 : struct, ISharedComponentData
-#else
-            where SharedComponent1 : struct, ISharedComponentData, IHashable, IRefEquatable<SharedComponent1>
-            where SharedComponent2 : struct, ISharedComponentData, IHashable, IRefEquatable<SharedComponent2>
+#if REF_EQUATABLE
+            , IRefEquatable<SharedComponent2>
 #endif
         {
             var sm = ArchetypeManager.GetSharedComponentDataManager();
