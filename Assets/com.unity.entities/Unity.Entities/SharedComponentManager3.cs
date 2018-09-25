@@ -47,7 +47,7 @@ namespace Unity.Entities
             return true;
         }
         private NativeMultiHashMap<ulong, int> indexDictionary = new NativeMultiHashMap<ulong, int>(128, Allocator.Persistent);
-        private (IList dataList, NativeList<int> referenceCounts, NativeList<int> versions, NativeArray<ulong> freeIndices, int maxFreeIndex)[] dataArray;
+        private (Array dataList, int dataCapacity, NativeList<int> referenceCounts, NativeList<int> versions, NativeArray<ulong> freeIndices, int maxFreeIndex)[] dataArray;
 
         private static void AddFreeIndex(int index, ref NativeArray<ulong> freeIndices, ref int maxFreeIndex)
         {
@@ -192,6 +192,35 @@ namespace Unity.Entities
             array.Dispose();
             array = tmp;
         }
+        private static object[] lengthParams = new object[1];
+        private static void Lengthen(ref Array array)
+        {
+            int length = array.Length;
+            lengthParams[0] = length << 1;
+            var arrayType = array.GetType();
+            var tmp = Activator.CreateInstance(arrayType, lengthParams) as Array;
+            unsafe
+            {
+                var src = UnsafeUtility.PinGCArrayAndGetDataAddress(array, out var handle0);
+                var dst = UnsafeUtility.PinGCArrayAndGetDataAddress(tmp, out var handle1);
+                UnsafeUtility.MemCpy(dst, src, length * 2 * UnsafeUtility.SizeOf(arrayType.GetElementType()));
+                UnsafeUtility.ReleaseGCObject(handle0);
+                UnsafeUtility.ReleaseGCObject(handle1);
+            }
+            array = tmp;
+        }
+        private static void Lengthen<T>(ref T[] array) where T : struct, ISharedComponentData
+        {
+            var tmp = new T[array.Length << 1];
+            unsafe
+            {
+                var src = UnsafeUtility.PinGCArrayAndGetDataAddress(array, out var handle0);
+                var dst = UnsafeUtility.PinGCArrayAndGetDataAddress(tmp, out var handle1);
+                UnsafeUtility.MemCpy(dst, src, tmp.Length * UnsafeUtility.SizeOf<T>());
+                UnsafeUtility.ReleaseGCObject(handle0);
+                UnsafeUtility.ReleaseGCObject(handle1);
+            }
+        }
         private void ReAlloc(int requiredComponentTypeIndexNotModified)
         {
             var oldLength = dataArray.Length;
@@ -201,7 +230,7 @@ namespace Unity.Entities
             {
                 types[0] = TypeManager.GetType(i + SharedComponentTypeStart);
                 if (!types[0].IsValueType || !ISharedComponentDataType.IsAssignableFrom(types[0])) continue;
-                var tmp = new (IList dataList, NativeList<int> referenceCounts, NativeList<int> versions, NativeArray<ulong> freeIndices, int maxFreeIndex)[i + 1];
+                var tmp = new (Array dataList, int dataCapacity, NativeList<int> referenceCounts, NativeList<int> versions, NativeArray<ulong> freeIndices, int maxFreeIndex)[i + 1];
                 Array.Copy(dataArray, tmp, dataArray.Length);
                 dataArray = tmp;
                 Initialize(ref dataArray[i]);
@@ -215,9 +244,9 @@ namespace Unity.Entities
             }
         }
 
-        private static void Initialize(ref (IList dataList, NativeList<int> referenceCounts, NativeList<int> versions, NativeArray<ulong> freeIndices, int maxFreeIndex) element)
+        private static void Initialize(ref (Array dataList, int dataCapacity, NativeList<int> referenceCounts, NativeList<int> versions, NativeArray<ulong> freeIndices, int maxFreeIndex) element)
         {
-            element.dataList = Activator.CreateInstance(ListType.MakeGenericType(types)) as IList;
+            element.dataList = Array.CreateInstance(types[0], 128);
             element.freeIndices = new NativeArray<ulong>(2, Allocator.Persistent);
             element.referenceCounts = new NativeList<int>(128, Allocator.Persistent);
             element.versions = new NativeList<int>(128, Allocator.Persistent);
@@ -227,7 +256,7 @@ namespace Unity.Entities
         public SharedComponentDataManager()
         {
             var actualCount = TypeManager.GetTypeCount() - SharedComponentTypeStart;
-            dataArray = new (IList dataList, NativeList<int> referenceCounts, NativeList<int> versions, NativeArray<ulong> freeIndices, int maxFreeIndex)[actualCount];
+            dataArray = new (Array dataList, int dataCapacity, NativeList<int> referenceCounts, NativeList<int> versions, NativeArray<ulong> freeIndices, int maxFreeIndex)[actualCount];
             for (int i = 0; i < dataArray.Length; i++)
             {
                 types[0] = TypeManager.GetType(i + SharedComponentTypeStart);
@@ -242,7 +271,7 @@ namespace Unity.Entities
             var typeIndex = TypeManager.GetTypeIndex<T>();
             // ReAlloc(typeIndex);
             ref var element = ref Accessor(typeIndex);
-            var list = element.dataList as List<T>;
+            var list = element.dataList as T[];
             if (element.maxFreeIndex == -1)
             {
                 sharedComponentValues.AddRange(list);
@@ -251,7 +280,7 @@ namespace Unity.Entities
             var enumerator = new Enumerator(element.freeIndices, element.maxFreeIndex);
             var index = 0;
             var existFree = enumerator.MoveNext();
-            var count = list.Count;
+            var count = list.Length;
             for (; existFree && index != count; ++index)
             {
                 if (index < enumerator.Current)
@@ -292,18 +321,18 @@ namespace Unity.Entities
             var dataIndex = typeIndex - SharedComponentTypeStart;
             // ReAlloc(typeIndex);
             ref var element = ref dataArray[dataIndex];
-            var list = element.dataList as List<T>;
+            var list = element.dataList as T[];
+            var count = list.Length;
             if (element.maxFreeIndex == -1)
             {
                 sharedComponentValues.AddRange(list);
-                for (int i = 0, length = list.Count; i < length; i++)
+                for (int i = 0; i < count; i++)
                     sharedComponentIndices.Add(ModifyIndex(typeIndex, i));
                 return;
             }
             var index = 0;
             var enumerator = new Enumerator(element.freeIndices, element.maxFreeIndex);
             var existFree = enumerator.MoveNext();
-            var count = list.Count;
             for (; existFree && index != count; ++index)
             {
                 if (index < enumerator.Current)
@@ -345,7 +374,7 @@ namespace Unity.Entities
             }
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private ref (IList dataList, NativeList<int> referenceCounts, NativeList<int> versions, NativeArray<ulong> freeIndices, int maxFreeIndex) Accessor(int typeIndex) => ref dataArray[typeIndex - SharedComponentTypeStart];
+        private ref (Array dataList, int dataCapacity, NativeList<int> referenceCounts, NativeList<int> versions, NativeArray<ulong> freeIndices, int maxFreeIndex) Accessor(int typeIndex) => ref dataArray[typeIndex - SharedComponentTypeStart];
 
         public int GetSharedComponentCount()
         {
@@ -367,7 +396,7 @@ namespace Unity.Entities
 
             var hashCode = newData.GetHashCode();
             ref var element = ref Accessor(typeIndex);
-            var index = FindNonDefaultSharedComponentIndex(typeIndex, CalcKey(typeIndex, hashCode), ref newData, element.dataList as List<T>);
+            var index = FindNonDefaultSharedComponentIndex(typeIndex, CalcKey(typeIndex, hashCode), ref newData, element.dataList as T[]);
             if (index != -1)
             {
                 ++element.referenceCounts[index];
@@ -375,7 +404,7 @@ namespace Unity.Entities
             }
             return ModifyIndex(typeIndex, Add(typeIndex, hashCode, ref newData, ref element));
         }
-        private unsafe int FindNonDefaultSharedComponentIndex<T>(int typeIndex, ulong key, ref T newData, List<T> list) where T : struct, ISharedComponentData, IRefEquatable<T>
+        private unsafe int FindNonDefaultSharedComponentIndex<T>(int typeIndex, ulong key, ref T newData, T[] list) where T : struct, ISharedComponentData, IRefEquatable<T>
         {
             if (!indexDictionary.TryGetFirstValue(key, out var itemIndex, out var iter))
                 return -1;
@@ -392,12 +421,12 @@ namespace Unity.Entities
             ref var element = ref Accessor(typeIndex);
             return InsertSharedComponentAssumeNonDefault(typeIndex, hashCode, newData, element.dataList, ref element.referenceCounts);
         }
-        internal unsafe int InsertSharedComponentAssumeNonDefault(int typeIndex, object newData, IList list)
+        internal unsafe int InsertSharedComponentAssumeNonDefault(int typeIndex, object newData, Array list)
         {
             // ReAlloc(typeIndex);
             return InsertSharedComponentAssumeNonDefault(typeIndex, newData.GetHashCode(), newData, list, ref Accessor(typeIndex).referenceCounts);
         }
-        internal unsafe int InsertSharedComponentAssumeNonDefault(int typeIndex, int hashCode, object newData, IList list, ref NativeList<int> referenceCounts)
+        internal unsafe int InsertSharedComponentAssumeNonDefault(int typeIndex, int hashCode, object newData, Array list, ref NativeList<int> referenceCounts)
         {
             var key = CalcKey(typeIndex, hashCode);
             var index = FindNonDefaultSharedComponentIndex(typeIndex, key, newData, list);
@@ -407,7 +436,7 @@ namespace Unity.Entities
                 referenceCounts[index] += 1;
             return ModifyIndex(typeIndex, index);
         }
-        private unsafe int FindNonDefaultSharedComponentIndex(int typeIndex, ulong key, object newData, IList list)
+        private unsafe int FindNonDefaultSharedComponentIndex(int typeIndex, ulong key, object newData, Array list)
         {
             if (!indexDictionary.TryGetFirstValue(key, out var itemIndex, out var iter))
                 return -1;
@@ -424,7 +453,7 @@ namespace Unity.Entities
                 return 0;
             var typeIndex = TypeManager.GetTypeIndex<T>();
             ref var tuple = ref Accessor(typeIndex);
-            var index = FindNonDefaultSharedComponentIndex(typeIndex, CalcKey(typeIndex, sharedData.GetHashCode()), ref sharedData, tuple.dataList as List<T>);
+            var index = FindNonDefaultSharedComponentIndex(typeIndex, CalcKey(typeIndex, sharedData.GetHashCode()), ref sharedData, tuple.dataList as T[]);
             return index == -1 ? 0 : tuple.versions[index];
         }
 #else
@@ -441,7 +470,7 @@ namespace Unity.Entities
 
             var hashCode = FastEquality.GetHashCode(ref newData, typeInfo);
             ref var element = ref Accessor(typeIndex);
-            var index = FindNonDefaultSharedComponentIndex(typeIndex, CalcKey(typeIndex, hashCode), ref newData, typeInfo, element.dataList as List<T>);
+            var index = FindNonDefaultSharedComponentIndex(typeIndex, CalcKey(typeIndex, hashCode), ref newData, typeInfo, element.dataList as T[]);
             if (index != -1)
             {
                 ++element.referenceCounts[index];
@@ -449,13 +478,13 @@ namespace Unity.Entities
             }
             return ModifyIndex(typeIndex, Add(typeIndex, hashCode, ref newData, ref element));
         }
-        private unsafe int FindNonDefaultSharedComponentIndex(int typeIndex, ulong key, void* newDataPtr, FastEquality.TypeInfo typeInfo, IList list)
+        private unsafe int FindNonDefaultSharedComponentIndex(int typeIndex, ulong key, void* newDataPtr, FastEquality.TypeInfo typeInfo, Array list)
         {
             if (!indexDictionary.TryGetFirstValue(key, out var itemIndex, out var iter))
                 return -1;
             do
             {
-                var dataPtr = PinGCObjectAndGetAddress(list[itemIndex], out var dataHandle);
+                var dataPtr = PinGCObjectAndGetAddress(list.GetValue(itemIndex), out var dataHandle);
                 if (FastEquality.Equals(dataPtr, newDataPtr, typeInfo))
                 {
                     UnsafeUtility.ReleaseGCObject(dataHandle);
@@ -465,7 +494,7 @@ namespace Unity.Entities
             } while (indexDictionary.TryGetNextValue(out itemIndex, ref iter));
             return -1;
         }
-        private unsafe int FindNonDefaultSharedComponentIndex<T>(int typeIndex, ulong key, ref T newData, FastEquality.TypeInfo typeInfo, List<T> list) where T : struct, ISharedComponentData
+        private unsafe int FindNonDefaultSharedComponentIndex<T>(int typeIndex, ulong key, ref T newData, FastEquality.TypeInfo typeInfo, T[] list) where T : struct, ISharedComponentData
         {
             if (!indexDictionary.TryGetFirstValue(key, out var itemIndex, out var iter))
                 return -1;
@@ -486,7 +515,7 @@ namespace Unity.Entities
             UnsafeUtility.ReleaseGCObject(handle);
             return answer;
         }
-        internal unsafe int InsertSharedComponentAssumeNonDefault(int typeIndex, object newData, FastEquality.TypeInfo typeInfo, IList list)
+        internal unsafe int InsertSharedComponentAssumeNonDefault(int typeIndex, object newData, FastEquality.TypeInfo typeInfo, Array list)
         {
             // ReAlloc(typeIndex);
             var ptr = PinGCObjectAndGetAddress(newData, out var handle);
@@ -494,7 +523,7 @@ namespace Unity.Entities
             UnsafeUtility.ReleaseGCObject(handle);
             return answer;
         }
-        internal unsafe int InsertSharedComponentAssumeNonDefault(int typeIndex, int hashCode, object newData, void* ptr, FastEquality.TypeInfo typeInfo, IList list, ref NativeList<int> referenceCounts)
+        internal unsafe int InsertSharedComponentAssumeNonDefault(int typeIndex, int hashCode, object newData, void* ptr, FastEquality.TypeInfo typeInfo, Array list, ref NativeList<int> referenceCounts)
         {
             var key = CalcKey(typeIndex, hashCode);
             var index = FindNonDefaultSharedComponentIndex(typeIndex, key, ptr, typeInfo, list);
@@ -514,23 +543,25 @@ namespace Unity.Entities
                     return 0;
             }
             ref var tuple = ref Accessor(typeIndex);
-            var index = FindNonDefaultSharedComponentIndex(typeIndex, CalcKey(typeIndex, FastEquality.GetHashCode(ref sharedData, typeInfo)), ref sharedData, typeInfo, tuple.dataList as List<T>);
+            var index = FindNonDefaultSharedComponentIndex(typeIndex, CalcKey(typeIndex, FastEquality.GetHashCode(ref sharedData, typeInfo)), ref sharedData, typeInfo, tuple.dataList as T[]);
             return index == -1 ? 0 : tuple.versions[index];
         }
 #endif
 
         private static unsafe void* PinGCObjectAndGetAddress(object target, out ulong handle) => (byte*)UnsafeUtility.PinGCObjectAndGetAddress(target, out handle) + TypeManager.ObjectOffset;
 
-        private int Add<T>(int typeIndex, int hashCode, ref T newData, ref (IList dataList, NativeList<int> referenceCounts, NativeList<int> versions, NativeArray<ulong> freeIndices, int maxFreeIndex) element) where T : struct, ISharedComponentData
+        private int Add<T>(int typeIndex, int hashCode, ref T newData, ref (Array dataList, int dataCapacity, NativeList<int> referenceCounts, NativeList<int> versions, NativeArray<ulong> freeIndices, int maxFreeIndex) element) where T : struct, ISharedComponentData
         {
             // ReAlloc(typeIndex);
             int index;
-            var list = element.dataList as List<T>;
+            var list = element.dataList as T[];
             if (element.maxFreeIndex == -1)
             {
-                index = list.Count;
+                if (element.dataCapacity == element.dataList.Length)
+                    Lengthen(ref element.dataList);
+                index = element.dataCapacity++;
                 indexDictionary.Add(CalcKey(typeIndex, hashCode), index);
-                list.Add(newData);
+                list[index] = newData;
                 element.referenceCounts.Add(1);
                 element.versions.Add(1);
             }
@@ -552,9 +583,11 @@ namespace Unity.Entities
             ref var element = ref Accessor(typeIndex);
             if (element.maxFreeIndex == -1)
             {
-                index = element.dataList.Count;
+                if (element.dataCapacity == element.dataList.Length)
+                    Lengthen(ref element.dataList);
+                index = element.dataCapacity++;
                 indexDictionary.Add(CalcKey(typeIndex, hashCode), index);
-                element.dataList.Add(newData);
+                element.dataList.SetValue(newData, index);
                 element.referenceCounts.Add(1);
                 element.versions.Add(1);
             }
@@ -562,7 +595,7 @@ namespace Unity.Entities
             {
                 index = DropMaxFreeIndex(element.freeIndices, ref element.maxFreeIndex);
                 indexDictionary.Add(CalcKey(typeIndex, hashCode), index);
-                element.dataList[index] = newData;
+                element.dataList.SetValue(newData, index);
                 element.referenceCounts[index] = 1;
                 element.versions[index] = 1;
             }
@@ -585,18 +618,18 @@ namespace Unity.Entities
         {
             var typeIndex = TypeManager.GetTypeIndex<T>();
             if (DeconstructIndex(index, typeIndex, out var actualIndex))
-                return (Accessor(typeIndex).dataList as List<T>)[actualIndex];
+                return (Accessor(typeIndex).dataList as T[])[actualIndex];
             return default;
         }
 
         public object GetSharedComponentDataBoxed(int index, int typeIndex)
-            => DeconstructIndex(index, typeIndex, out var actualIndex) ? Accessor(typeIndex).dataList[actualIndex] : Activator.CreateInstance(TypeManager.GetType(typeIndex));
+            => DeconstructIndex(index, typeIndex, out var actualIndex) ? Accessor(typeIndex).dataList.GetValue(actualIndex) : Activator.CreateInstance(TypeManager.GetType(typeIndex));
 
         public object GetSharedComponentDataNonDefaultBoxed(int index)
         {
             Assert.AreNotEqual(0, index);
             DeconstructIndex(index, out var typeIndex, out var actualIndex);
-            return Accessor(typeIndex).dataList[actualIndex];
+            return Accessor(typeIndex).dataList.GetValue(actualIndex);
         }
 
         public void AddReference(int modifiedIndex)
@@ -615,7 +648,7 @@ namespace Unity.Entities
 
             if (newCount != 0)
                 return;
-            var data = (element.dataList as List<T>)[actualIndex];
+            var data = (element.dataList as T[])[actualIndex];
 #if REF_EQUATABLE
             var hashCode = data.GetHashCode();
 #else
@@ -657,7 +690,7 @@ namespace Unity.Entities
 
             if (newCount != 0)
                 return;
-            var data = element.dataList[actualIndex];
+            var data = element.dataList.GetValue(actualIndex);
 #if REF_EQUATABLE
             var hashCode = data.GetHashCode();
 #else
@@ -695,7 +728,7 @@ namespace Unity.Entities
                 var list = dataArray[i].dataList;
                 if (list == null) continue;
                 int maxFreeIndex = dataArray[i].maxFreeIndex;
-                if (list.Count != maxFreeIndex + 1) return false;
+                if (dataArray[i].dataCapacity != maxFreeIndex + 1) return false;
                 var rest = maxFreeIndex & 63;
                 var chunkCount = maxFreeIndex >> 6;
                 var array = dataArray[i].freeIndices;
@@ -771,9 +804,9 @@ namespace Unity.Entities
                 var typeIndex = SharedComponentTypeStart + i;
                 var typeInfo = TypeManager.GetTypeInfo(typeIndex).FastEqualityTypeInfo;
                 ref var thisRefCounts = ref Accessor(typeIndex).referenceCounts;
-                for (int j = 0, count = tuple.dataList.Count; j < count; j++)
+                for (int j = 0, count = tuple.dataCapacity; j < count; j++)
                 {
-                    var dstIndex = InsertSharedComponentAssumeNonDefault(typeIndex, tuple.dataList[j], typeInfo, tuple.dataList);
+                    var dstIndex = InsertSharedComponentAssumeNonDefault(typeIndex, tuple.dataList.GetValue(j), typeInfo, tuple.dataList);
                     remap.TryAdd(ModifyIndex(typeIndex, j), dstIndex);
                     if (DeconstructIndex(dstIndex, typeIndex, out var actualIndex))
                         thisRefCounts[actualIndex] += tuple.referenceCounts[j] - 1;
@@ -794,7 +827,7 @@ namespace Unity.Entities
                 element.referenceCounts.ResizeUninitialized(0);
                 element.versions.ResizeUninitialized(0);
                 element.maxFreeIndex = -1;
-                element.dataList.Clear();
+                element.dataCapacity = 0;
                 unsafe
                 {
                     var ptr = NativeArrayUnsafeUtility.GetUnsafePtr(element.freeIndices);
