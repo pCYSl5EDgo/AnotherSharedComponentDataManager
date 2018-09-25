@@ -12,4 +12,9 @@ public sealed class TestHelper : EditorWindow
     {
         EditorApplication.ExecuteMenuItem("Window/Analysis/Entity Debugger");
     }
+    [MenuItem("Window/Helper/EditSettings &#d")]
+    public static void EditSettings()
+    {
+        EditorApplication.ExecuteMenuItem("Edit/SEttings");
+    }
 }
