@@ -195,7 +195,8 @@ namespace Unity.Entities
 
             public void Dispose() { }
         }
-        public static readonly int SharedComponentTypeStart;
+        private static readonly int SharedComponentTypeStart;
+        private static readonly Type[] EqualsTypeArray = new Type[] { typeof(object) };
         static SharedComponentDataManager()
         {
             TypeManager.Initialize();
@@ -205,13 +206,21 @@ namespace Unity.Entities
             {
                 var types = assemblies[i].GetTypes();
                 for (int j = 0; j < types.Length; ++j)
-                    if (types[j].IsValueType && ISharedComponentDataType.IsAssignableFrom(types[j]))
-                        TypeManager.GetTypeIndex(types[j]);
+                {
+                    if (!types[j].IsValueType || !ISharedComponentDataType.IsAssignableFrom(types[j]) || (types[j].IsGenericType && types[j].IsGenericTypeDefinition)) continue;
+                    TypeManager.GetTypeIndex(types[j]);
+                }
             }
             for (int i = 1, length = TypeManager.GetTypeCount(); i < length; ++i)
             {
                 var type = TypeManager.GetType(i);
-                if (!type.IsValueType || !ISharedComponentDataType.IsAssignableFrom(type)) continue;
+                if (!type.IsValueType || !ISharedComponentDataType.IsAssignableFrom(type) || (type.IsGenericType && type.IsGenericTypeDefinition)) continue;
+#if REF_EQUATABLE
+                var EqualsMethodInfo = type.GetMethod("Equals", BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly, null, CallingConventions.Any, EqualsTypeArray, null);
+                if (EqualsMethodInfo == null || EqualsMethodInfo.DeclaringType != type) throw new Exception(type.FullName);
+                var GetHashCodeMethodInfo = type.GetMethod("GetHashCode", BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly, null, CallingConventions.Any, Array.Empty<Type>(), null);
+                if (GetHashCodeMethodInfo == null || GetHashCodeMethodInfo.DeclaringType != type) throw new Exception(type.FullName);
+#endif
                 SharedComponentTypeStart = i;
                 break;
             }
@@ -242,7 +251,13 @@ namespace Unity.Entities
             for (int i = dataArray.Length - 2; i >= oldLength; --i)
             {
                 var type = TypeManager.GetType(i + SharedComponentTypeStart);
-                if (!ISharedComponentDataType.IsAssignableFrom(type) || !type.IsValueType) continue;
+                if (!ISharedComponentDataType.IsAssignableFrom(type) || !type.IsValueType || (type.IsGenericType && type.IsGenericTypeDefinition)) continue;
+#if REF_EQUATABLE
+                var EqualsMethodInfo = type.GetMethod("Equals", BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly, null, CallingConventions.Any, EqualsTypeArray, null);
+                if (EqualsMethodInfo == null || EqualsMethodInfo.DeclaringType != type) throw new Exception(type.FullName);
+                var GetHashCodeMethodInfo = type.GetMethod("GetHashCode", BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly, null, CallingConventions.Any, Array.Empty<Type>(), null);
+                if (GetHashCodeMethodInfo == null || GetHashCodeMethodInfo.DeclaringType != type) throw new Exception(type.FullName);
+#endif
                 dataArray[i] = Element.Create(128, type);
             }
         }
@@ -263,7 +278,7 @@ namespace Unity.Entities
         {
             sharedComponentValues.Add(default);
             var typeIndex = TypeManager.GetTypeIndex<T>();
-            // ReAlloc(typeIndex);
+            ReAlloc(typeIndex);
             ref var element = ref Accessor(typeIndex);
             var array = element.datas as T[];
             if (element.maxFreeIndex == -1)
@@ -314,7 +329,7 @@ namespace Unity.Entities
             sharedComponentIndices.Add(0);
             var typeIndex = TypeManager.GetTypeIndex<T>();
             var dataIndex = typeIndex - SharedComponentTypeStart;
-            // ReAlloc(typeIndex);
+            ReAlloc(typeIndex);
             ref var element = ref dataArray[dataIndex];
             var array = element.datas as T[];
             var count = element.actualLength;
@@ -414,13 +429,13 @@ namespace Unity.Entities
         }
         internal unsafe int InsertSharedComponentAssumeNonDefault(int typeIndex, int hashCode, object newData)
         {
-            // ReAlloc(typeIndex);
+            ReAlloc(typeIndex);
             ref var element = ref Accessor(typeIndex);
             return InsertSharedComponentAssumeNonDefault(typeIndex, hashCode, newData, element.datas, element.referenceCounts);
         }
         internal unsafe int InsertSharedComponentAssumeNonDefault(int typeIndex, object newData, Array list)
         {
-            // ReAlloc(typeIndex);
+            ReAlloc(typeIndex);
             return InsertSharedComponentAssumeNonDefault(typeIndex, newData.GetHashCode(), newData, list, Accessor(typeIndex).referenceCounts);
         }
         internal unsafe int InsertSharedComponentAssumeNonDefault(int typeIndex, int hashCode, object newData, Array list, int[] referenceCounts)
@@ -505,7 +520,7 @@ namespace Unity.Entities
         }
         internal unsafe int InsertSharedComponentAssumeNonDefault(int typeIndex, int hashCode, object newData, FastEquality.TypeInfo typeInfo)
         {
-            // ReAlloc(typeIndex);
+            ReAlloc(typeIndex);
             ref var element = ref Accessor(typeIndex);
             var ptr = PinGCObjectAndGetAddress(newData, out var handle);
             var answer = InsertSharedComponentAssumeNonDefault(typeIndex, hashCode, newData, ptr, typeInfo, element.datas, element.referenceCounts);
@@ -514,7 +529,7 @@ namespace Unity.Entities
         }
         internal unsafe int InsertSharedComponentAssumeNonDefault(int typeIndex, object newData, FastEquality.TypeInfo typeInfo, Array array)
         {
-            // ReAlloc(typeIndex);
+            ReAlloc(typeIndex);
             var ptr = PinGCObjectAndGetAddress(newData, out var handle);
             var answer = InsertSharedComponentAssumeNonDefault(typeIndex, FastEquality.GetHashCode(ptr, typeInfo), newData, ptr, typeInfo, array, Accessor(typeIndex).referenceCounts);
             UnsafeUtility.ReleaseGCObject(handle);
@@ -549,7 +564,7 @@ namespace Unity.Entities
 
         private int Add<T>(int typeIndex, int hashCode, ref T newData, ref Element element) where T : struct, ISharedComponentData
         {
-            // ReAlloc(typeIndex);
+            ReAlloc(typeIndex);
             int index;
             var list = element.datas as T[];
             if (element.maxFreeIndex == -1)
@@ -570,7 +585,7 @@ namespace Unity.Entities
 
         private int Add(int typeIndex, int hashCode, object newData)
         {
-            // ReAlloc(typeIndex);
+            ReAlloc(typeIndex);
             int index;
             ref var element = ref Accessor(typeIndex);
             if (element.maxFreeIndex == -1)
