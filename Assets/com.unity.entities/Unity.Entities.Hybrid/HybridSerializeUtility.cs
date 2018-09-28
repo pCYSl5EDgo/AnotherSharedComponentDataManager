@@ -28,7 +28,7 @@ namespace Unity.Entities.Serialization
             // so remove the ref that was added on deserialization
             for (int i = 0; i < sharedComponentCount; ++i)
             {
-                transaction.SharedComponentDataManager.RemoveReference(i + 1);
+                transaction.SharedComponentDataManager.RemoveReference(i+1);
             }
         }
 #else
@@ -109,6 +109,7 @@ namespace Unity.Entities.Serialization
         {
             if (gameobject == null)
                 return Array.Empty<int>();
+
             manager.m_SharedComponentManager.PrepareForDeserialize();
 
             var sharedData = gameobject.GetComponents<ComponentDataWrapperBase>();

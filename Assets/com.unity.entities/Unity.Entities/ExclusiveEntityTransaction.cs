@@ -250,19 +250,6 @@ namespace Unity.Entities
         }
 #if SHARED_1
         public void SetSharedComponentData<T>(Entity entity, T componentData) where T : struct, ISharedComponentData
-#else
-        public void SetSharedComponentData<T>(Entity entity, T componentData) where T : struct, ISharedComponentData
-#if REF_EQUATABLE
-
-        , IRefEquatable<T>
-#endif
-            => SetSharedComponentData<T>(entity, ref componentData);
-        public void SetSharedComponentData<T>(Entity entity, ref T componentData) where T : struct, ISharedComponentData
-#endif
-#if REF_EQUATABLE
-
-    , IRefEquatable<T>
-#endif
         {
             CheckAccess();
 
@@ -271,16 +258,35 @@ namespace Unity.Entities
 
             var archetypeManager = ArchetypeManager;
             var sharedComponentDataManager = SharedComponentDataManager;
-#if SHARED_1
+
             var newSharedComponentDataIndex = sharedComponentDataManager.InsertSharedComponent(componentData);
-            m_Entities->SetSharedComponentDataIndex(archetypeManager, sharedComponentDataManager, entity, typeIndex, newSharedComponentDataIndex);
+            m_Entities->SetSharedComponentDataIndex(archetypeManager, sharedComponentDataManager, entity, typeIndex,
+                newSharedComponentDataIndex);
             sharedComponentDataManager.RemoveReference(newSharedComponentDataIndex);
-#else
-            var newSharedComponentDataIndex = sharedComponentDataManager.InsertSharedComponent(ref componentData);
-            m_Entities->SetSharedComponentDataIndex(archetypeManager, sharedComponentDataManager, entity, typeIndex, newSharedComponentDataIndex);
-            sharedComponentDataManager.RemoveReference<T>(newSharedComponentDataIndex);
-#endif
         }
+#else
+        public void SetSharedComponentData<T>(Entity entity, T componentData) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<T>
+#endif
+        => SetSharedComponentData(entity, ref componentData);
+        public void SetSharedComponentData<T>(Entity entity, ref T componentData) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<T>
+#endif
+        {
+            CheckAccess();
+
+            var typeIndex = TypeManager.GetTypeIndex<T>();
+            m_Entities->AssertEntityHasComponent(entity, typeIndex);
+
+            var sharedComponentDataManager = SharedComponentDataManager;
+
+            var newSharedComponentDataIndex = sharedComponentDataManager.InsertSharedComponent(ref componentData);
+            m_Entities->SetSharedComponentDataIndex(ArchetypeManager, sharedComponentDataManager, entity, typeIndex, newSharedComponentDataIndex);
+            sharedComponentDataManager.RemoveReference<T>(newSharedComponentDataIndex);
+        }
+#endif
 
         internal void AllocateConsecutiveEntitiesForLoading(int count)
         {

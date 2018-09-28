@@ -7,14 +7,15 @@ namespace Unity.Entities
 {
     public class World : IDisposable
     {
-        private static readonly List<World> allWorlds = new List<World>();
-        private bool m_AllowGetManager = true;
+        static readonly List<World> allWorlds = new List<World>();
+        bool m_AllowGetManager = true;
 
         //@TODO: What about multiple managers of the same type...
-        private Dictionary<Type, ScriptBehaviourManager> m_BehaviourManagerLookup =
+        Dictionary<Type, ScriptBehaviourManager> m_BehaviourManagerLookup =
             new Dictionary<Type, ScriptBehaviourManager>();
 
-        private List<ScriptBehaviourManager> m_BehaviourManagers = new List<ScriptBehaviourManager>();
+        List<ScriptBehaviourManager> m_BehaviourManagers = new List<ScriptBehaviourManager>();
+        int m_SystemIDAllocator = 0;
 
         public World(string name)
         {
@@ -199,41 +200,12 @@ namespace Unity.Entities
 
         public T CreateManager<T>(params object[] constructorArgumnents) where T : ScriptBehaviourManager
         {
-            return (T)CreateManagerInternal(typeof(T), constructorArgumnents);
+            return (T) CreateManagerInternal(typeof(T), constructorArgumnents);
         }
-
-#if !SHARED_1
-        public T CreateManager<T>(T manager) where T : ScriptBehaviourManager => manager == null ? throw new ArgumentNullException() : CreateManagerInternal(manager);
-
-        private T CreateManagerInternal<T>(T manager) where T : ScriptBehaviourManager
-        {
-#if ENABLE_UNITY_COLLECTIONS_CHECKS
-            if (!m_AllowGetManager)
-                throw new ArgumentException(
-                    "During destruction of a system you are not allowed to create more systems.");
-#endif
-            m_AllowGetManager = true;
-            m_BehaviourManagers.Add(manager);
-            AddTypeLookup(typeof(T), manager);
-
-            try
-            {
-                manager.CreateInstance(this);
-            }
-            catch
-            {
-                RemoveManagerInteral(manager);
-                throw;
-            }
-
-            ++Version;
-            return manager;
-        }
-#endif
 
         public T GetOrCreateManager<T>() where T : ScriptBehaviourManager
         {
-            return (T)GetOrCreateManagerInternal(typeof(T));
+            return (T) GetOrCreateManagerInternal(typeof(T));
         }
 
         public ScriptBehaviourManager GetOrCreateManager(Type type)
@@ -243,7 +215,7 @@ namespace Unity.Entities
 
         public T GetExistingManager<T>() where T : ScriptBehaviourManager
         {
-            return (T)GetExistingManagerInternal(typeof(T));
+            return (T) GetExistingManagerInternal(typeof(T));
         }
 
         public ScriptBehaviourManager GetExistingManager(Type type)
@@ -255,6 +227,11 @@ namespace Unity.Entities
         {
             RemoveManagerInteral(manager);
             manager.DestroyInstance();
+        }
+
+        internal int AllocateSystemID()
+        {
+            return ++m_SystemIDAllocator;
         }
     }
 }

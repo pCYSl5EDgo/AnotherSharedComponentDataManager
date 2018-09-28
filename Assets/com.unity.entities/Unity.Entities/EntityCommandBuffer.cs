@@ -517,6 +517,8 @@ namespace Unity.Entities
         private int m_SafetyReadWriteCount;
 
         [NativeSetClassTypeToNullOnSchedule] private DisposeSentinel m_DisposeSentinel;
+
+        internal int SystemID;
 #endif
 
         /// <summary>
@@ -590,6 +592,7 @@ namespace Unity.Entities
 
             m_SafetyReadOnlyCount = 0;
             m_SafetyReadWriteCount = 3;
+            SystemID = 0;
 #endif
         }
 
@@ -745,34 +748,73 @@ namespace Unity.Entities
         }
 
 
-        private static bool IsDefaultObject<T>(ref T component, out int hashCode) where T : struct, ISharedComponentData
 #if REF_EQUATABLE
-        , IRefEquatable<T>
-#endif
+        private static bool IsDefaultObject<T>(ref T component, out int hashCode) where T : struct, ISharedComponentData, IRefEquatable<T>
         {
-#if REF_EQUATABLE
             hashCode = component.GetHashCode();
             return default(T).Equals(ref component);
+        }
 #else
+        private static bool IsDefaultObject<T>(ref T component, out int hashCode) where T : struct, ISharedComponentData
+        {
             var typeIndex = TypeManager.GetTypeIndex<T>();
             var typeInfo = TypeManager.GetTypeInfo(typeIndex).FastEqualityTypeInfo;
             var defaultValue = default(T);
             hashCode = FastEquality.GetHashCode(ref component, typeInfo);
             return FastEquality.Equals(ref defaultValue, ref component, typeInfo);
-#endif
         }
-
-        public void AddSharedComponent<T>(T component) where T : struct, ISharedComponentData
-#if REF_EQUATABLE
-            , IRefEquatable<T>
 #endif
+
+#if SHARED_1
+        public void AddSharedComponent<T>(T component) where T : struct, ISharedComponentData
         {
             AddSharedComponent(Entity.Null, component);
         }
 
         public void AddSharedComponent<T>(Entity e, T component) where T : struct, ISharedComponentData
+        {
+            EnforceSingleThreadOwnership();
+            int hashCode;
+            if (IsDefaultObject(ref component, out hashCode))
+                m_Data->AddEntitySharedComponentCommand<T>(&m_Data->m_MainThreadChain, MainThreadJobIndex, ECBCommand.AddSharedComponentData, e, hashCode, null);
+            else
+                m_Data->AddEntitySharedComponentCommand<T>(&m_Data->m_MainThreadChain, MainThreadJobIndex, ECBCommand.AddSharedComponentData, e, hashCode, component);
+        }
+
+        public void SetSharedComponent<T>(T component) where T : struct, ISharedComponentData
+        {
+            SetSharedComponent(Entity.Null, component);
+        }
+
+        public void SetSharedComponent<T>(Entity e, T component) where T : struct, ISharedComponentData
+        {
+            EnforceSingleThreadOwnership();
+            int hashCode;
+            if (IsDefaultObject(ref component, out hashCode))
+                m_Data->AddEntitySharedComponentCommand<T>(&m_Data->m_MainThreadChain, MainThreadJobIndex, ECBCommand.SetSharedComponentData, e, hashCode, null);
+            else
+                m_Data->AddEntitySharedComponentCommand<T>(&m_Data->m_MainThreadChain, MainThreadJobIndex, ECBCommand.SetSharedComponentData, e, hashCode, component);
+        }
+#else
+        public void AddSharedComponent<T>(T component) where T : struct, ISharedComponentData
 #if REF_EQUATABLE
-            , IRefEquatable<T>
+        , IRefEquatable<T>
+#endif
+        => AddSharedComponent(default, ref component);
+        public void AddSharedComponent<T>(ref T component) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<T>
+#endif
+        => AddSharedComponent(default, ref component);
+
+        public void AddSharedComponent<T>(Entity e, T component) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<T>
+#endif
+        => AddSharedComponent(e, ref component);
+        public void AddSharedComponent<T>(Entity e, ref T component) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<T>
 #endif
         {
             EnforceSingleThreadOwnership();
@@ -785,24 +827,38 @@ namespace Unity.Entities
 
         public void SetSharedComponent<T>(T component) where T : struct, ISharedComponentData
 #if REF_EQUATABLE
-            , IRefEquatable<T>
+        , IRefEquatable<T>
 #endif
-        {
-            SetSharedComponent(Entity.Null, component);
-        }
+        => SetSharedComponent(default, ref component);
+        public void SetSharedComponent<T>(ref T component) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<T>
+#endif
+        => SetSharedComponent(default, ref component);
 
         public void SetSharedComponent<T>(Entity e, T component) where T : struct, ISharedComponentData
 #if REF_EQUATABLE
-            , IRefEquatable<T>
+        , IRefEquatable<T>
 #endif
         {
             EnforceSingleThreadOwnership();
-            int hashCode;
-            if (IsDefaultObject(ref component, out hashCode))
+            if (IsDefaultObject(ref component, out var hashCode))
                 m_Data->AddEntitySharedComponentCommand<T>(&m_Data->m_MainThreadChain, MainThreadJobIndex, ECBCommand.SetSharedComponentData, e, hashCode, null);
             else
                 m_Data->AddEntitySharedComponentCommand<T>(&m_Data->m_MainThreadChain, MainThreadJobIndex, ECBCommand.SetSharedComponentData, e, hashCode, component);
         }
+        public void SetSharedComponent<T>(Entity e, ref T component) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<T>
+#endif
+        {
+            EnforceSingleThreadOwnership();
+            if (IsDefaultObject(ref component, out var hashCode))
+                m_Data->AddEntitySharedComponentCommand<T>(&m_Data->m_MainThreadChain, MainThreadJobIndex, ECBCommand.SetSharedComponentData, e, hashCode, null);
+            else
+                m_Data->AddEntitySharedComponentCommand<T>(&m_Data->m_MainThreadChain, MainThreadJobIndex, ECBCommand.SetSharedComponentData, e, hashCode, component);
+        }
+#endif
 
         /// <summary>
         /// Play back all recorded operations against an entity manager.
@@ -981,7 +1037,8 @@ namespace Unity.Entities
                                 var componentType = (ComponentType)TypeManager.GetType(cmd->ComponentTypeIndex);
                                 var entity = cmd->Header.Entity == Entity.Null ? playbackState.CurrentEntity : cmd->Header.Entity;
                                 mgr.AddComponent(entity, componentType);
-                                mgr.SetComponentDataRaw(entity, cmd->ComponentTypeIndex, cmd + 1, cmd->ComponentSize);
+                                if (!componentType.IsZeroSized)
+                                    mgr.SetComponentDataRaw(entity, cmd->ComponentTypeIndex, cmd + 1, cmd->ComponentSize);
                             }
                             break;
 
@@ -1244,16 +1301,42 @@ namespace Unity.Entities
                 else
                     m_Data->AddEntitySharedComponentCommand<T>(chain, jobIndex, ECBCommand.AddSharedComponentData, e, hashCode, component);
             }
-
+#if SHARED_1
+            public void SetSharedComponent<T>(int jobIndex, T component) where T : struct, ISharedComponentData
+            {
+                SetSharedComponent(jobIndex, Entity.Null, component);
+            }
+#else
             public void SetSharedComponent<T>(int jobIndex, T component) where T : struct, ISharedComponentData
 #if REF_EQUATABLE
             , IRefEquatable<T>
 #endif
-            {
-                SetSharedComponent(jobIndex, Entity.Null, component);
-            }
+            => SetSharedComponent(jobIndex, Entity.Null, ref component);
+            public void SetSharedComponent<T>(int jobIndex, ref T component) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+            , IRefEquatable<T>
+#endif
+            => SetSharedComponent(jobIndex, Entity.Null, ref component);
+#endif
 
+#if SHARED_1
             public void SetSharedComponent<T>(int jobIndex, Entity e, T component) where T : struct, ISharedComponentData
+            {
+                CheckWriteAccess();
+                var chain = ThreadChain;
+                int hashCode;
+                if (IsDefaultObject(ref component, out hashCode))
+                    m_Data->AddEntitySharedComponentCommand<T>(chain, jobIndex, ECBCommand.SetSharedComponentData, e, hashCode, null);
+                else
+                    m_Data->AddEntitySharedComponentCommand<T>(chain, jobIndex, ECBCommand.SetSharedComponentData, e, hashCode, component);
+            }
+#else
+            public void SetSharedComponent<T>(int jobIndex, Entity e, T component) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+            , IRefEquatable<T>
+#endif
+            => SetSharedComponent(jobIndex, e, ref component);
+            public void SetSharedComponent<T>(int jobIndex, Entity e, ref T component) where T : struct, ISharedComponentData
 #if REF_EQUATABLE
             , IRefEquatable<T>
 #endif
@@ -1266,6 +1349,7 @@ namespace Unity.Entities
                 else
                     m_Data->AddEntitySharedComponentCommand<T>(chain, jobIndex, ECBCommand.SetSharedComponentData, e, hashCode, component);
             }
+#endif
         }
     }
 }

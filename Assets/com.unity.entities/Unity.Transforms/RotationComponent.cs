@@ -17,7 +17,7 @@ namespace Unity.Transforms
     [UnityEngine.DisallowMultipleComponent]
     public class RotationComponent : ComponentDataWrapper<Rotation>
     {
-        public new void OnValidate()
+        public void OnValidate()
         {
             m_SerializedData.Value = math.normalizesafe(m_SerializedData.Value);
             base.OnValidate();

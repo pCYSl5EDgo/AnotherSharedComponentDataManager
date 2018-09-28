@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
 
@@ -304,11 +303,50 @@ namespace Unity.Entities
             m_Filter = filter;
             m_Filter.RequiredChangeVersion = version;
         }
-
+#if SHARED_1
         public void SetFilter<SharedComponent1>(SharedComponent1 sharedComponent1)
             where SharedComponent1 : struct, ISharedComponentData
+        {
+            var sm = ArchetypeManager.GetSharedComponentDataManager();
+
+            var filter = new ComponentGroupFilter();
+            filter.Type = FilterType.SharedComponent;
+            filter.Shared.Count = 1;
+            filter.Shared.IndexInComponentGroup[0] = GetIndexInComponentGroup(TypeManager.GetTypeIndex<SharedComponent1>());
+            filter.Shared.SharedComponentIndex[0] = sm.InsertSharedComponent(sharedComponent1);
+
+            SetFilter(ref filter);
+        }
+
+        public void SetFilter<SharedComponent1, SharedComponent2>(SharedComponent1 sharedComponent1,
+            SharedComponent2 sharedComponent2)
+            where SharedComponent1 : struct, ISharedComponentData
+            where SharedComponent2 : struct, ISharedComponentData
+        {
+            var sm = ArchetypeManager.GetSharedComponentDataManager();
+
+            var filter = new ComponentGroupFilter();
+            filter.Type = FilterType.SharedComponent;
+            filter.Shared.Count = 2;
+            filter.Shared.IndexInComponentGroup[0] = GetIndexInComponentGroup(TypeManager.GetTypeIndex<SharedComponent1>());
+            filter.Shared.SharedComponentIndex[0] = sm .InsertSharedComponent(sharedComponent1);
+
+            filter.Shared.IndexInComponentGroup[1] = GetIndexInComponentGroup(TypeManager.GetTypeIndex<SharedComponent2>());
+            filter.Shared.SharedComponentIndex[1] = sm.InsertSharedComponent(sharedComponent2);
+
+            SetFilter(ref filter);
+        }
+#else
+        public void SetFilter<SharedComponent1>(SharedComponent1 sharedComponent1)
+        where SharedComponent1 : struct, ISharedComponentData
 #if REF_EQUATABLE
-            , IRefEquatable<SharedComponent1>
+        , IRefEquatable<SharedComponent1>
+#endif
+        => SetFilter(ref sharedComponent1);
+        public void SetFilter<SharedComponent1>(ref SharedComponent1 sharedComponent1)
+            where SharedComponent1 : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<SharedComponent1>
 #endif
         {
             var sm = ArchetypeManager.GetSharedComponentDataManager();
@@ -317,24 +355,27 @@ namespace Unity.Entities
             filter.Type = FilterType.SharedComponent;
             filter.Shared.Count = 1;
             filter.Shared.IndexInComponentGroup[0] = GetIndexInComponentGroup(TypeManager.GetTypeIndex<SharedComponent1>());
-#if SHARED_1
-            filter.Shared.SharedComponentIndex[0] = sm.InsertSharedComponent(sharedComponent1);
-#else
             filter.Shared.SharedComponentIndex[0] = sm.InsertSharedComponent(ref sharedComponent1);
-#endif
 
             SetFilter(ref filter);
         }
 
-        public void SetFilter<SharedComponent1, SharedComponent2>(SharedComponent1 sharedComponent1,
-            SharedComponent2 sharedComponent2)
+#if REF_EQUATABLE
+        public void SetFilter<SharedComponent1, SharedComponent2>(SharedComponent1 sharedComponent1, SharedComponent2 sharedComponent2)
+            where SharedComponent1 : struct, ISharedComponentData, IRefEquatable<SharedComponent1>
+            where SharedComponent2 : struct, ISharedComponentData, IRefEquatable<SharedComponent2>
+            => SetFilter(ref sharedComponent1, ref sharedComponent2);
+        public void SetFilter<SharedComponent1, SharedComponent2>(ref SharedComponent1 sharedComponent1, ref SharedComponent2 sharedComponent2)
+            where SharedComponent1 : struct, ISharedComponentData, IRefEquatable<SharedComponent1>
+            where SharedComponent2 : struct, ISharedComponentData, IRefEquatable<SharedComponent2>
+#else
+        public void SetFilter<SharedComponent1, SharedComponent2>(SharedComponent1 sharedComponent1, SharedComponent2 sharedComponent2)
             where SharedComponent1 : struct, ISharedComponentData
-#if REF_EQUATABLE
-            , IRefEquatable<SharedComponent1>
-#endif
             where SharedComponent2 : struct, ISharedComponentData
-#if REF_EQUATABLE
-            , IRefEquatable<SharedComponent2>
+            => SetFilter(ref sharedComponent1, ref sharedComponent2);
+        public void SetFilter<SharedComponent1, SharedComponent2>(ref SharedComponent1 sharedComponent1, ref SharedComponent2 sharedComponent2)
+            where SharedComponent1 : struct, ISharedComponentData
+            where SharedComponent2 : struct, ISharedComponentData
 #endif
         {
             var sm = ArchetypeManager.GetSharedComponentDataManager();
@@ -343,20 +384,14 @@ namespace Unity.Entities
             filter.Type = FilterType.SharedComponent;
             filter.Shared.Count = 2;
             filter.Shared.IndexInComponentGroup[0] = GetIndexInComponentGroup(TypeManager.GetTypeIndex<SharedComponent1>());
-#if SHARED_1
-            filter.Shared.SharedComponentIndex[0] = sm.InsertSharedComponent(sharedComponent1);
-
-            filter.Shared.IndexInComponentGroup[1] = GetIndexInComponentGroup(TypeManager.GetTypeIndex<SharedComponent2>());
-            filter.Shared.SharedComponentIndex[1] = sm.InsertSharedComponent(sharedComponent2);
-#else
             filter.Shared.SharedComponentIndex[0] = sm.InsertSharedComponent(ref sharedComponent1);
 
             filter.Shared.IndexInComponentGroup[1] = GetIndexInComponentGroup(TypeManager.GetTypeIndex<SharedComponent2>());
             filter.Shared.SharedComponentIndex[1] = sm.InsertSharedComponent(ref sharedComponent2);
-#endif
+
             SetFilter(ref filter);
         }
-
+#endif
         public void SetFilterChanged(ComponentType componentType)
         {
             var filter = new ComponentGroupFilter();

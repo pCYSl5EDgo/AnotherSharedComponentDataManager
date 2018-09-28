@@ -177,11 +177,7 @@ namespace Unity.Entities
 
         internal override void UpdateComponentData(EntityManager manager, Entity entity)
         {
-#if SHARED_1
             manager.SetSharedComponentData(entity, m_SerializedData);
-#else
-            manager.SetSharedComponentData(entity, ref m_SerializedData);
-#endif
         }
 
         internal override void UpdateSerializedData(EntityManager manager, Entity entity)

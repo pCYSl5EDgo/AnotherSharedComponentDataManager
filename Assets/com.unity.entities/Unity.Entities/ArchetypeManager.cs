@@ -664,7 +664,6 @@ namespace Unity.Entities
         {
             return (Chunk*)(node - 1);
         }
-
 #if SHARED_1
         public void AddExistingChunk(Chunk* chunk)
         {
@@ -696,12 +695,13 @@ namespace Unity.Entities
             archetype->EntityCount += chunk->Count;
             for (var i = 0; i < archetype->NumSharedComponents; ++i)
             {
-                int v = chunk->SharedComponentValueArray[i] - 1;
-                if (v == -1)
-                    m_SharedComponentManager.AddReference(chunk->SharedComponentValueArray[i] = 0);
+                ref var v = ref chunk->SharedComponentValueArray[i];
+                if (v == 0)
+                    m_SharedComponentManager.AddReference(0);
                 else
-                    m_SharedComponentManager.AddReference(chunk->SharedComponentValueArray[i] = sharedComponents[v]);
+                    m_SharedComponentManager.AddReference(v = sharedComponents[v - 1]);
             }
+
             if (chunk->Count < chunk->Capacity)
             {
                 if (archetype->NumSharedComponents == 0)
@@ -715,6 +715,7 @@ namespace Unity.Entities
             }
         }
 #endif
+
         public void ConstructChunk(Archetype* archetype, Chunk* chunk, int* sharedComponentDataIndices)
         {
             chunk->Archetype = archetype;
@@ -1001,12 +1002,13 @@ namespace Unity.Entities
 
                 for (int i = 0; i < dstArchetype->NumSharedComponents; ++i)
                 {
+                    ref var sharedIndex = ref chunk->SharedComponentValueArray[i];
 #if SHARED_1
-                    chunk->SharedComponentValueArray[i] = remapShared[chunk->SharedComponentValueArray[i]];
+                    sharedIndex = remapShared[sharedIndex];
 #else
-                    if (!remapShared.TryGetValue(chunk->SharedComponentValueArray[i], out var item))
-                        throw new Exception(chunk->SharedComponentValueArray[i].ToString());
-                    chunk->SharedComponentValueArray[i] = item;
+                    if (!remapShared.TryGetValue(sharedIndex, out var item))
+                        throw new Exception(sharedIndex.ToString());
+                    sharedIndex = item;
 #endif
                 }
             }

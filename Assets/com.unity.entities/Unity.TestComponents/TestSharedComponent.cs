@@ -19,6 +19,6 @@
 
     class TestSharedComponent : SharedComponentDataWrapper<TestShared>
     {
-
+        
     }
 }

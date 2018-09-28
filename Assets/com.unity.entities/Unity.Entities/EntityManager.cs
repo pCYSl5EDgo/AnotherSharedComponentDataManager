@@ -1,13 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Text;
 using Unity.Assertions;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
-using UnityEngine;
 using UnityEngine.Scripting;
 
 [assembly: InternalsVisibleTo("Unity.Entities.Hybrid")]
@@ -492,7 +490,6 @@ namespace Unity.Entities
             UnsafeUtility.CopyPtrToStructure(ptr, out value);
             return value;
         }
-
         public void SetComponentData<T>(Entity entity, T componentData) where T : struct, IComponentData
         {
             var typeIndex = TypeManager.GetTypeIndex<T>();
@@ -525,10 +522,7 @@ namespace Unity.Entities
         {
             return m_SharedComponentManager.GetSharedComponentCount();
         }
-#if !SHARED_1
-        public int GetSharedComponentCount<T>() => m_SharedComponentManager.GetSharedComponentCount<T>();
-#endif
-
+#if SHARED_1
         public void GetAllUniqueSharedComponentData<T>(List<T> sharedComponentValues)
             where T : struct, ISharedComponentData
         {
@@ -554,27 +548,12 @@ namespace Unity.Entities
         {
             return m_SharedComponentManager.GetSharedComponentData<T>(sharedComponentIndex);
         }
-#if SHARED_1
+
         public void AddSharedComponentData<T>(Entity entity, T componentData) where T : struct, ISharedComponentData
-#else
-        public void AddSharedComponentData<T>(Entity entity, T componentData) where T : struct, ISharedComponentData
-#if REF_EQUATABLE
-        , IRefEquatable<T>
-#endif
-            => AddSharedComponentData(entity, ref componentData);
-        public void AddSharedComponentData<T>(Entity entity, ref T componentData) where T : struct, ISharedComponentData
-#if REF_EQUATABLE
-        , IRefEquatable<T>
-#endif
-#endif
         {
             //TODO: optimize this (no need to move the entity to a new chunk twice)
             AddComponent(entity, ComponentType.Create<T>());
-#if SHARED_1
             SetSharedComponentData(entity, componentData);
-#else
-            SetSharedComponentData(entity, ref componentData);
-#endif
         }
 
         internal void AddSharedComponentDataBoxed(Entity entity, int typeIndex, int hashCode, object componentData)
@@ -584,23 +563,98 @@ namespace Unity.Entities
             SetSharedComponentDataBoxed(entity, typeIndex, hashCode, componentData);
         }
 
-#if SHARED_1
         public void SetSharedComponentData<T>(Entity entity, T componentData) where T : struct, ISharedComponentData
         {
             BeforeStructuralChange();
 
             var typeIndex = TypeManager.GetTypeIndex<T>();
             Entities->AssertEntityHasComponent(entity, typeIndex);
+
             var newSharedComponentDataIndex = m_SharedComponentManager.InsertSharedComponent(componentData);
-            Entities->SetSharedComponentDataIndex(ArchetypeManager, m_SharedComponentManager, entity, typeIndex, newSharedComponentDataIndex);
+            Entities->SetSharedComponentDataIndex(ArchetypeManager, m_SharedComponentManager, entity, typeIndex,
+                newSharedComponentDataIndex);
+            m_SharedComponentManager.RemoveReference(newSharedComponentDataIndex);
+        }
+
+        internal void SetSharedComponentDataBoxed(Entity entity, int typeIndex, int hashCode, object componentData)
+        {
+            BeforeStructuralChange();
+
+            Entities->AssertEntityHasComponent(entity, typeIndex);
+
+            var newSharedComponentDataIndex = 0;
+            if (componentData != null) // null means default
+                newSharedComponentDataIndex = m_SharedComponentManager.InsertSharedComponentAssumeNonDefault(typeIndex,
+                    hashCode, componentData, TypeManager.GetTypeInfo(typeIndex).FastEqualityTypeInfo);
+
+            Entities->SetSharedComponentDataIndex(ArchetypeManager, m_SharedComponentManager, entity, typeIndex,
+                newSharedComponentDataIndex);
             m_SharedComponentManager.RemoveReference(newSharedComponentDataIndex);
         }
 #else
+        public int GetSharedComponentCount<T>() where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<T>
+#endif
+        => m_SharedComponentManager.GetSharedComponentCount<T>();
+        public void GetAllUniqueSharedComponentData<T>(List<T> sharedComponentValues)
+            where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<T>
+#endif
+        => m_SharedComponentManager.GetAllUniqueSharedComponents(sharedComponentValues);
+
+        public void GetAllUniqueSharedComponentData<T>(List<T> sharedComponentValues, List<int> sharedComponentIndices)
+            where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<T>
+#endif
+        => m_SharedComponentManager.GetAllUniqueSharedComponents(sharedComponentValues, sharedComponentIndices);
+
+        public T GetSharedComponentData<T>(Entity entity) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<T>
+#endif
+        {
+            var typeIndex = TypeManager.GetTypeIndex<T>();
+            Entities->AssertEntityHasComponent(entity, typeIndex);
+
+            return m_SharedComponentManager.GetSharedComponentData<T>(Entities->GetSharedComponentDataIndex(entity, typeIndex));
+        }
+
+        public T GetSharedComponentData<T>(int sharedComponentIndex) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<T>
+#endif
+        => m_SharedComponentManager.GetSharedComponentData<T>(sharedComponentIndex);
+
+        public void AddSharedComponentData<T>(Entity entity, T componentData) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<T>
+#endif
+        => AddSharedComponentData(entity, ref componentData);
+        public void AddSharedComponentData<T>(Entity entity, ref T componentData) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<T>
+#endif
+        {
+            //TODO: optimize this (no need to move the entity to a new chunk twice)
+            AddComponent(entity, ComponentType.Create<T>());
+            SetSharedComponentData(entity, ref componentData);
+        }
+
+        internal void AddSharedComponentDataBoxed(Entity entity, int typeIndex, int hashCode, object componentData)
+        {
+            //TODO: optimize this (no need to move the entity to a new chunk twice)
+            AddComponent(entity, ComponentType.FromTypeIndex(typeIndex));
+            SetSharedComponentDataBoxed(entity, typeIndex, hashCode, componentData);
+        }
+
         public void SetSharedComponentData<T>(Entity entity, T componentData) where T : struct, ISharedComponentData
 #if REF_EQUATABLE
         , IRefEquatable<T>
 #endif
-            => SetSharedComponentData(entity, ref componentData);
+        => SetSharedComponentData(entity, ref componentData);
         public void SetSharedComponentData<T>(Entity entity, ref T componentData) where T : struct, ISharedComponentData
 #if REF_EQUATABLE
         , IRefEquatable<T>
@@ -610,12 +664,11 @@ namespace Unity.Entities
 
             var typeIndex = TypeManager.GetTypeIndex<T>();
             Entities->AssertEntityHasComponent(entity, typeIndex);
+
             var newSharedComponentDataIndex = m_SharedComponentManager.InsertSharedComponent(ref componentData);
             Entities->SetSharedComponentDataIndex(ArchetypeManager, m_SharedComponentManager, entity, typeIndex, newSharedComponentDataIndex);
-            m_SharedComponentManager.RemoveReference<T>(newSharedComponentDataIndex);
+            m_SharedComponentManager.RemoveReference(newSharedComponentDataIndex);
         }
-#endif
-
         internal void SetSharedComponentDataBoxed(Entity entity, int typeIndex, int hashCode, object componentData)
         {
             BeforeStructuralChange();
@@ -630,10 +683,10 @@ namespace Unity.Entities
                 newSharedComponentDataIndex = m_SharedComponentManager.InsertSharedComponentAssumeNonDefault(typeIndex, hashCode, componentData, TypeManager.GetTypeInfo(typeIndex).FastEqualityTypeInfo);
 #endif
 
-            Entities->SetSharedComponentDataIndex(ArchetypeManager, m_SharedComponentManager, entity, typeIndex,
-                newSharedComponentDataIndex);
+            Entities->SetSharedComponentDataIndex(ArchetypeManager, m_SharedComponentManager, entity, typeIndex, newSharedComponentDataIndex);
             m_SharedComponentManager.RemoveReference(newSharedComponentDataIndex);
         }
+#endif
 
         public DynamicBuffer<T> GetBuffer<T>(Entity entity) where T : struct, IBufferElementData
         {
@@ -777,6 +830,11 @@ namespace Unity.Entities
 
             ComponentJobSafetyManager.CompleteReadAndWriteDependency(typeIndex);
 
+#if ENABLE_UNITY_COLLECTIONS_CHECKS            
+            if (TypeManager.GetTypeInfo(typeIndex).SizeInChunk != size)
+                throw new System.ArgumentException($"SetComponentDataRaw<{TypeManager.GetType(typeIndex)}> can not be called with a zero sized component and must have same size as sizeof(T).");
+#endif
+
             var ptr = Entities->GetComponentDataWithTypeRW(entity, typeIndex, Entities->GlobalSystemVersion);
             UnsafeUtility.MemCpy(ptr, data, size);
         }
@@ -786,6 +844,12 @@ namespace Unity.Entities
             Entities->AssertEntityHasComponent(entity, typeIndex);
 
             ComponentJobSafetyManager.CompleteReadAndWriteDependency(typeIndex);
+
+#if ENABLE_UNITY_COLLECTIONS_CHECKS            
+            if (TypeManager.GetTypeInfo(typeIndex).IsZeroSized)
+                throw new System.ArgumentException($"GetComponentDataRaw<{TypeManager.GetType(typeIndex)}> can not be called with a zero sized component.");
+#endif
+
 
             var ptr = Entities->GetComponentDataWithTypeRW(entity, typeIndex, Entities->GlobalSystemVersion);
             return ptr;
@@ -803,23 +867,15 @@ namespace Unity.Entities
         {
             return Entities->GetComponentTypeOrderVersion(TypeManager.GetTypeIndex<T>());
         }
-#if SHARED_1
+
         public int GetSharedComponentOrderVersion<T>(T sharedComponent) where T : struct, ISharedComponentData
+#if REF_EQUATABLE
+        , IRefEquatable<T>
+#endif
         {
             return m_SharedComponentManager.GetSharedComponentVersion(sharedComponent);
         }
-#else
-        public int GetSharedComponentOrderVersion<T>(T sharedComponent) where T : struct, ISharedComponentData
-#if REF_EQUATABLE
-        , IRefEquatable<T>
-#endif
-         => GetSharedComponentOrderVersion(ref sharedComponent);
-        public int GetSharedComponentOrderVersion<T>(ref T sharedComponent) where T : struct, ISharedComponentData
-#if REF_EQUATABLE
-        , IRefEquatable<T>
-#endif
-         => m_SharedComponentManager.GetSharedComponentVersion(ref sharedComponent);
-#endif
+
         public ExclusiveEntityTransaction BeginExclusiveEntityTransaction()
         {
             ComponentJobSafetyManager.BeginExclusiveTransaction();
@@ -994,6 +1050,15 @@ namespace Unity.Entities
                         }
                     }
                 }
+            }
+        }
+
+        public void GetAllArchetypes(NativeList<EntityArchetype> allArchetypes)
+        {
+            for (var archetype = ArchetypeManager.m_LastArchetype; archetype != null; archetype = archetype->PrevArchetype)
+            {
+                var entityArchetype = new EntityArchetype() { Archetype = archetype };
+                allArchetypes.Add(entityArchetype);
             }
         }
 

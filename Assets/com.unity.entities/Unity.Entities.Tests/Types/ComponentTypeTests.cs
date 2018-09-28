@@ -5,6 +5,8 @@ namespace Unity.Entities.Tests.Types
     [TestFixture]
     public class ComponentTypeTests : ECSTestsFixture
     {
+        struct MockComponentData : IComponentData {}
+
         [Test]
         public void EqualityOperator_WhenEqual_ReturnsTrue()
         {
@@ -19,7 +21,7 @@ namespace Unity.Entities.Tests.Types
         [Test]
         public void EqualityOperator_WhenDifferentType_ReturnsFalse()
         {
-            var t1 = new ComponentType(typeof(EmptySystem), ComponentType.AccessMode.ReadOnly);
+            var t1 = new ComponentType(typeof(MockComponentData), ComponentType.AccessMode.ReadOnly);
             var t2 = new ComponentType(typeof(Entity), ComponentType.AccessMode.ReadOnly);
 
             var result = t1 == t2;
@@ -45,14 +47,14 @@ namespace Unity.Entities.Tests.Types
             var t2 = new ComponentType(typeof(Entity), ComponentType.AccessMode.ReadOnly);
 
             var result = t1 != t2;
-
+            Debug.Log(result);
             Assert.IsFalse(result);
         }
 
         [Test]
         public void InequalityOperator_WhenDifferentType_ReturnsTrue()
         {
-            var t1 = new ComponentType(typeof(EmptySystem), ComponentType.AccessMode.ReadOnly);
+            var t1 = new ComponentType(typeof(MockComponentData), ComponentType.AccessMode.ReadOnly);
             var t2 = new ComponentType(typeof(Entity), ComponentType.AccessMode.ReadOnly);
 
             var result = t1 != t2;

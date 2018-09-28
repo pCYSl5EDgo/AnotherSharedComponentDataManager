@@ -1,12 +1,9 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
-using Unity.Assertions;
 using Unity.Collections;
-using UnityEngine;
 using Unity.Collections.LowLevel.Unsafe;
 
 namespace Unity.Entities.Serialization
@@ -21,7 +18,6 @@ namespace Unity.Entities.Serialization
         }
 
         public static int CurrentFileFormatVersion = 6;
-
 #if SHARED_1
         public static unsafe void DeserializeWorld(ExclusiveEntityTransaction manager, BinaryReader reader, int numSharedComponents)
         {
@@ -46,7 +42,7 @@ namespace Unity.Entities.Serialization
 
             for (int i = 0; i < totalChunkCount; ++i)
             {
-                var chunk = (Chunk*)UnsafeUtility.Malloc(Chunk.kChunkSize, 64, Allocator.Persistent);
+                var chunk = (Chunk*) UnsafeUtility.Malloc(Chunk.kChunkSize, 64, Allocator.Persistent);
                 reader.ReadBytes(chunk, Chunk.kChunkSize);
 
                 chunk->Archetype = archetypes[(int)chunk->Archetype].Archetype;
@@ -65,7 +61,7 @@ namespace Unity.Entities.Serialization
                     }
                 }
 
-                chunk->ChangeVersion = (uint*)((byte*)chunk +
+                chunk->ChangeVersion = (uint*) ((byte*) chunk +
                                                 Chunk.GetChangedComponentOffset(chunk->Archetype->TypesCount,
                                                     chunk->Archetype->NumSharedComponents));
 
@@ -82,13 +78,14 @@ namespace Unity.Entities.Serialization
                         var target = (BufferHeader*)OffsetFromPointer(chunk->Buffer, bufferPatches[pi].ChunkOffset);
 
                         // TODO: Alignment
-                        target->Pointer = (byte*)UnsafeUtility.Malloc(bufferPatches[pi].AllocSizeBytes, 8, Allocator.Persistent);
+                        target->Pointer = (byte*) UnsafeUtility.Malloc(bufferPatches[pi].AllocSizeBytes, 8, Allocator.Persistent);
 
                         reader.ReadBytes(target->Pointer, bufferPatches[pi].AllocSizeBytes);
                     }
 
                     bufferPatches.Dispose();
                 }
+
                 manager.AddExistingChunk(chunk);
             }
 
@@ -161,13 +158,13 @@ namespace Unity.Entities.Serialization
 
                     bufferPatches.Dispose();
                 }
+
                 manager.AddExistingChunk(chunk, sharedComponents);
             }
 
             archetypes.Dispose();
         }
 #endif
-
         private static unsafe NativeArray<EntityArchetype> ReadArchetypes(BinaryReader reader, NativeArray<int> types, ExclusiveEntityTransaction entityManager,
             out int totalEntityCount)
         {

@@ -1,5 +1,4 @@
 using System;
-using UnityEngine;
 
 namespace Unity.Entities.Tests
 {
@@ -18,7 +17,7 @@ namespace Unity.Entities.Tests
 #endif
     }
 
-    [DisallowMultipleComponent]
+    [UnityEngine.DisallowMultipleComponent]
     public class MockSharedDisallowMultipleComponent : SharedComponentDataWrapper<MockSharedDisallowMultiple>
     {
 

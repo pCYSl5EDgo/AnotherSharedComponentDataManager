@@ -1,7 +1,6 @@
 ﻿using NUnit.Framework;
 using Unity.Collections;
 using System;
-using Unity.Entities;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities.Serialization;
 
@@ -271,7 +270,6 @@ namespace Unity.Entities.Tests
 #else
             SerializeUtility.DeserializeWorld(entityManager.BeginExclusiveEntityTransaction(), reader, Array.Empty<int>());
 #endif
-
             entityManager.EndExclusiveEntityTransaction();
 
             try

@@ -25,7 +25,7 @@ namespace Unity.Entities.Tests
             public int Integer
             {
                 get { return Value.Value; }
-                set { Value = new MockData { Value = value }; }
+                set { Value = new MockData {Value = value}; }
             }
         }
 
@@ -48,7 +48,7 @@ namespace Unity.Entities.Tests
             public int Integer
             {
                 get { return Value.Value; }
-                set { Value = new MockSharedData { Value = value }; }
+                set { Value = new MockSharedData {Value = value}; }
             }
         }
 

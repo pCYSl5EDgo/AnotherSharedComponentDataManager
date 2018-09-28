@@ -1,5 +1,3 @@
-using Unity.Entities;
-
 namespace Unity.Entities.Tests
 {
     public struct EcsTestData : IComponentData
@@ -139,7 +137,7 @@ namespace Unity.Entities.Tests
 
         public static implicit operator EcsIntElement(int e)
         {
-            return new EcsIntElement { Value = e };
+            return new EcsIntElement {Value = e};
         }
 
         public int Value;
